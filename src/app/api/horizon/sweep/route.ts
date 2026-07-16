@@ -41,7 +41,7 @@ async function sweepChain(supabase: ReturnType<typeof createServiceRoleSupabaseC
     if (from > confirmedHead) continue;
 
     const to = confirmedHead - from > MAX_BLOCKS_PER_INVOCATION ? from + MAX_BLOCKS_PER_INVOCATION : confirmedHead;
-    await processWindow(supabase, client, [wallet], from, to);
+    await processWindow(supabase, client, chainId, [wallet], from, to);
     swept += 1;
   }
 

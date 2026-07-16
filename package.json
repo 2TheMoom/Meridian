@@ -9,7 +9,9 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "worker": "tsx worker/src/index.ts",
-    "worker:dev": "tsx watch worker/src/index.ts"
+    "worker:dev": "tsx watch worker/src/index.ts",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "seed:allowlist": "tsx scripts/seedAllowlist.ts"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.11",

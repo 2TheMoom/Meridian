@@ -58,7 +58,7 @@ async function runWindows() {
     while (confirmedHead - position >= BigInt(config.windowBlocks)) {
       const from = position + 1n;
       const to = position + BigInt(config.windowBlocks);
-      await processWindow(supabase, client, wallets, from, to);
+      await processWindow(supabase, client, config.chainId, wallets, from, to);
       position = to;
       cursor = position;
       log(`processed window [${from}, ${to}]`);
@@ -79,7 +79,7 @@ async function flushPartialWindow() {
   if (confirmedHead <= position) return;
   processing = true;
   try {
-    await processWindow(supabase, client, wallets, position + 1n, confirmedHead);
+    await processWindow(supabase, client, config.chainId, wallets, position + 1n, confirmedHead);
     log(`flushed partial window [${position + 1n}, ${confirmedHead}]`);
     cursor = confirmedHead;
   } catch (err) {

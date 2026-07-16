@@ -12,6 +12,7 @@ export type RegisteredWallet = { id: string; address: Address };
 export async function processWindow(
   supabase: SupabaseClient,
   client: PublicClient,
+  chainId: number,
   wallets: RegisteredWallet[],
   fromBlock: bigint,
   toBlock: bigint,
@@ -22,7 +23,9 @@ export async function processWindow(
   const [transferLogs, approvalLogs, allowlistRows] = await Promise.all([
     getTransferLogsForWallets(client, addresses, fromBlock, toBlock),
     getApprovalLogsForWallets(client, addresses, fromBlock, toBlock),
-    supabase.from("allowlist").select("address"),
+    // Allowlist entries are chain-scoped: the same address can be an
+    // unrelated contract on a different network, so never mix networks here.
+    supabase.from("allowlist").select("address").eq("chain_id", chainId),
   ]);
 
   const allowlist = new Set(
