@@ -178,7 +178,7 @@ export default function TimelinePage() {
                   <MomentCard
                     key={moment.id}
                     moment={moment}
-                    chainId={selectedWallet?.chain_id ?? 10143}
+                    chainId={selectedWallet?.chain_id ?? 143}
                     onAcknowledge={(id) => updateStatus(id, "acked")}
                     onDismiss={(id) => updateStatus(id, "dismissed")}
                     onRevoked={(id) =>
