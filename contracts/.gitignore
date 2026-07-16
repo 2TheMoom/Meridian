@@ -1,0 +1,6 @@
+# Foundry build artifacts — always regenerable via `forge build`
+cache/
+out/
+
+# lib/forge-std is intentionally committed (vendored, not a git submodule) —
+# see contracts/README.md for why.

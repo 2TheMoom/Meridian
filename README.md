@@ -4,8 +4,6 @@
 
 Meridian is a consumer-protection layer for [Monad](https://monad.xyz) (chain ID 143). It watches registered wallets, scores risky on-chain activity with a deterministic rules engine, explains that risk in plain language, and lets users act — revoke an approval, acknowledge a pattern, adjust a guardrail — before a mistake settles.
 
-Full product specification: [`meridian-mvp-spec.md`](./meridian-mvp-spec.md).
-
 ## How it works
 
 | Component | Role |
