@@ -49,10 +49,11 @@ npm run dev
 npm run worker        # or `npm run worker:dev` for auto-restart on change
 ```
 
-Needs `HORIZON_WS_RPC_URL` (a WebSocket RPC endpoint — Chainstack/QuickNode, not the HTTP one used by the app) plus `SUPABASE_SERVICE_ROLE_KEY`. Defaults to Monad testnet (`HORIZON_CHAIN_ID=10143`); set it to `143` for mainnet. It:
+Needs `HORIZON_WS_RPC_URL` (a WebSocket RPC endpoint — Chainstack/QuickNode, not the HTTP one used by the app), `SUPABASE_SERVICE_ROLE_KEY`, `MERIDIAN_APP_URL`, and `ORACLE_EXPLAIN_SECRET` (the worker calls the app's `/api/oracle/explain` for narration rather than holding `ANTHROPIC_API_KEY` itself — see below). Defaults to Monad testnet (`HORIZON_CHAIN_ID=10143`); set it to `143` for mainnet. It:
 
 - subscribes to `newHeads`, batches blocks into windows (`HORIZON_WINDOW_BLOCKS`, default 50), and treats a block final after `HORIZON_CONFIRMATION_DEPTH` (default 3) confirmations
 - per window, fetches Transfer/Approval logs for all registered wallets (chunked via `LOGS_CHUNK_BLOCKS`) and native + touched-token balances, then upserts a `snapshots` row and advances `sync_state`
+- after each snapshot write, runs the Moment pipeline against it (see below) before moving to the next window
 - a new wallet with no `sync_state` starts from the current confirmed head, not genesis — v1 detects going forward, it doesn't backfill history
 - on any per-window error it logs and keeps running; `POST /api/horizon/sweep` (secret-header-authed, meant to be hit by an external cron every 5 min) is the from-DB-state reconciliation path if the worker itself was down
 
@@ -75,6 +76,24 @@ npm test
 - **Restraint-only guardrail:** a regex backstop (`violatesRestraintPrinciple`) checks the response for leverage/yield-farming/hedging/repositioning language or em dashes before it's trusted — on a match (or an API failure, a refusal, or a malformed response) it falls back to a deterministic, on-brand template per rule ID, so a Moment always gets `oracle_text` populated. Tested in `explain.test.ts` without hitting the network.
 - Uses `thinking: {type: "disabled"}` and `effort: "low"` — this is a short, bounded, templated narration task, not one that benefits from extended reasoning.
 
+### Moment creation pipeline
+
+`src/lib/oracle/pipeline.ts` (`createMomentsFromSnapshot`) is what turns a Horizon snapshot into `moments` rows: it evaluates all five rules, checks each wallet's `policies` row (tier + an optional `threshold.momentThreshold` override — `off` suppresses the rule entirely, otherwise the default cutoff is 50), dedupes against existing moments, calls the explanation layer, and inserts. It's called automatically from `horizon/window.ts` right after every snapshot upsert (worker and cron-sweep paths both wire it in — the worker passes an HTTP explain client so it never needs `ANTHROPIC_API_KEY`, the sweep route calls the explanation layer in-process since it already runs inside the app).
+
+**Honest status per rule** — not every rule can produce real Moments yet, because the upstream data isn't all there:
+
+| Rule | Status | Why |
+|---|---|---|
+| R1 (risky approval) | **Live** | Unlimited/allowlist flags come straight off the snapshot Horizon already computes. Contract-age bonus is unavailable (no explorer integration yet), so R1 fires correctly off the other two signals alone. |
+| R5 (floor breach) | **Live for actual breaches** | Compares snapshot balance to `policies.threshold.floorNative`. "Projected breach within 7d" needs velocity data (see R2) and is always `false` for now. |
+| R2 (velocity spike) | **Wired, inert** | `snapshots.outflow_usd` is always 0 until the Week 3 price cache lands — the pipeline aggregates 7d/30d outflow correctly, it's just summing zeros. Activates automatically once USD normalization exists. |
+| R3 (unacked recurring payment) | **Wired, inert** | Evaluates whatever `patterns` rows exist, but Horizon doesn't yet detect recurring payments and write them (spec section 4, point 3). Activates once that detection is built. |
+| R4 (first-touch contract) | **Wired, mostly inert** | "First touch" is computed correctly (never seen this spender in an earlier snapshot for this wallet), but value-ratio, contract-age, and explorer-verification bonuses are all unavailable, so R4 only ever reaches its 30-point base score — below the default 50-point threshold. Also approval-gated only: a native-value-bearing call to a new contract isn't detectable yet (Horizon only watches ERC-20 Transfer/Approval logs, not call data). |
+
+Dedup strategy varies by rule shape: R1/R4 key on `tx_ref` (one Moment per approval transaction), R2/R3/R5 key on "no other open Moment for this (wallet, rule)" so a sustained condition doesn't spam a new Moment every ~20-second window.
+
+**Known scaling limitation:** the pipeline issues several sequential Supabase queries per wallet per window (policy lookups, dedup checks, a prior-snapshots scan for R4). Fine at v1 scale; worth batching or caching before this runs against hundreds of wallets on 20-second windows.
+
 ## Security posture
 
 - **Dependencies:** `npm audit` is clean (0 vulnerabilities) as of this scaffold. `package.json` `overrides` force-patch transitive copies of `viem`/`ws`/`postcss`/`uuid` bundled inside WalletConnect/Reown's dependency chain — re-run `npm audit` after any dependency bump, since those overrides pin versions that need revisiting as upstream catches up.
@@ -91,4 +110,4 @@ npm test
 
 Week 1 complete: app scaffold, Supabase schema + RLS, wallet connect + SIWE sign-in, wallet registration (with ownership verification), security headers, and the Horizon worker (WebSocket listener + cron fallback route).
 
-Week 2 in progress: Oracle's R1–R5 rules engine (pure functions, unit tested), allowlist seeding script, Claude explanation layer. Not yet built: Moment creation pipeline (wiring Horizon's `snapshots` through the rules engine and explanation layer into `moments` rows), Timeline UI. See `meridian-mvp-spec.md` section 10 for the build plan.
+Week 2 in progress: Oracle's R1–R5 rules engine (pure functions, unit tested), allowlist seeding script, Claude explanation layer, Moment creation pipeline (R1 and R5-actual-breach live; R2/R3/R4 wired but waiting on upstream data — see table above). Not yet built: Timeline UI. See `meridian-mvp-spec.md` section 10 for the build plan.

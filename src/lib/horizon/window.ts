@@ -3,11 +3,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getWalletBalances } from "./balances";
 import { type ApprovalLog, getApprovalLogsForWallets, getTransferLogsForWallets, type TransferLog } from "./logs";
 import { setLastProcessedBlock } from "./syncState";
+import type { ExplainFn } from "../oracle/explain";
+import { createMomentsFromSnapshot } from "../oracle/pipeline";
 
 const UINT256_MAX = 2n ** 256n - 1n;
 const UNLIMITED_APPROVAL_RATIO = 10n;
 
-export type RegisteredWallet = { id: string; address: Address };
+export type RegisteredWallet = { id: string; address: Address; label: string | null };
 
 export async function processWindow(
   supabase: SupabaseClient,
@@ -16,6 +18,7 @@ export async function processWindow(
   wallets: RegisteredWallet[],
   fromBlock: bigint,
   toBlock: bigint,
+  explain: ExplainFn,
 ): Promise<void> {
   if (wallets.length === 0) return;
 
@@ -34,7 +37,7 @@ export async function processWindow(
 
   await Promise.all(
     wallets.map((wallet) =>
-      processWalletWindow(supabase, client, wallet, transferLogs, approvalLogs, allowlist, fromBlock, toBlock),
+      processWalletWindow(supabase, client, chainId, wallet, transferLogs, approvalLogs, allowlist, fromBlock, toBlock, explain),
     ),
   );
 }
@@ -42,12 +45,14 @@ export async function processWindow(
 async function processWalletWindow(
   supabase: SupabaseClient,
   client: PublicClient,
+  chainId: number,
   wallet: RegisteredWallet,
   transferLogs: TransferLog[],
   approvalLogs: ApprovalLog[],
   allowlist: Set<string>,
   fromBlock: bigint,
   toBlock: bigint,
+  explain: ExplainFn,
 ) {
   const addr = wallet.address.toLowerCase();
 
@@ -80,19 +85,35 @@ async function processWalletWindow(
     };
   });
 
-  const { error } = await supabase.from("snapshots").upsert(
-    {
-      wallet_id: wallet.id,
-      from_block: fromBlock.toString(),
-      to_block: toBlock.toString(),
-      approvals,
-      balances,
-      outflow_usd: 0, // USD normalization is Week 3 scope (price cache), see spec section 10
-    },
-    { onConflict: "wallet_id,from_block,to_block" },
-  );
+  const snapshot = {
+    wallet_id: wallet.id,
+    from_block: fromBlock.toString(),
+    to_block: toBlock.toString(),
+    approvals,
+    balances,
+    outflow_usd: 0, // USD normalization is Week 3 scope (price cache), see spec section 10
+  };
+
+  const { error } = await supabase
+    .from("snapshots")
+    .upsert(snapshot, { onConflict: "wallet_id,from_block,to_block" });
 
   if (error) throw new Error(`snapshot upsert failed for wallet ${wallet.id}: ${error.message}`);
 
   await setLastProcessedBlock(supabase, wallet.id, toBlock);
+
+  // Score the snapshot and create any moments it warrants. A failure here
+  // must not roll back or block the snapshot/cursor writes above — those are
+  // Horizon's job and are already durable; Oracle scoring can safely retry
+  // by re-running against the same (idempotent) snapshot data later.
+  try {
+    await createMomentsFromSnapshot(
+      supabase,
+      { id: wallet.id, chainId, label: wallet.label },
+      snapshot,
+      explain,
+    );
+  } catch (err) {
+    console.error(`[horizon] moment pipeline failed for wallet ${wallet.id}`, err);
+  }
 }

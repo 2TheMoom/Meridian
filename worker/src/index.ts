@@ -3,6 +3,7 @@ import { monad, monadTestnet } from "../../src/lib/chain";
 import { getLastProcessedBlock, setLastProcessedBlock } from "../../src/lib/horizon/syncState";
 import { getRegisteredWallets } from "../../src/lib/horizon/wallets";
 import { processWindow, type RegisteredWallet } from "../../src/lib/horizon/window";
+import { createExplainHttpClient } from "../../src/lib/oracle/explainClient";
 import { createServiceRoleSupabaseClient } from "../../src/lib/supabase/server";
 import { config } from "./config";
 
@@ -12,6 +13,7 @@ const client = createPublicClient({
   chain,
   transport: webSocket(config.wsRpcUrl, { reconnect: true, retryCount: 10 }),
 });
+const explain = createExplainHttpClient(config.meridianAppUrl, config.oracleExplainSecret);
 
 let wallets: RegisteredWallet[] = [];
 let cursor: bigint | null = null;
@@ -58,7 +60,7 @@ async function runWindows() {
     while (confirmedHead - position >= BigInt(config.windowBlocks)) {
       const from = position + 1n;
       const to = position + BigInt(config.windowBlocks);
-      await processWindow(supabase, client, config.chainId, wallets, from, to);
+      await processWindow(supabase, client, config.chainId, wallets, from, to, explain);
       position = to;
       cursor = position;
       log(`processed window [${from}, ${to}]`);
@@ -79,7 +81,7 @@ async function flushPartialWindow() {
   if (confirmedHead <= position) return;
   processing = true;
   try {
-    await processWindow(supabase, client, config.chainId, wallets, position + 1n, confirmedHead);
+    await processWindow(supabase, client, config.chainId, wallets, position + 1n, confirmedHead, explain);
     log(`flushed partial window [${position + 1n}, ${confirmedHead}]`);
     cursor = confirmedHead;
   } catch (err) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedBySecret } from "@/lib/internalAuth";
-import { explainMoment } from "@/lib/oracle/explain";
+import { explainMomentDirect } from "@/lib/oracle/explain";
 import type { RuleId } from "@/lib/oracle/types";
 
 const VALID_RULE_IDS: RuleId[] = ["R1", "R2", "R3", "R4", "R5"];
@@ -44,15 +44,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid walletLabel" }, { status: 400 });
   }
 
-  const explanation = await explainMoment({
+  const { oracleText } = await explainMomentDirect({
     ruleId: ruleId as RuleId,
     details: details as Record<string, unknown>,
     walletContext: { label: (walletLabel as string | null) ?? null, chainId },
   });
 
-  return NextResponse.json({
-    why: explanation.why,
-    saferAlternative: explanation.saferAlternative,
-    oracleText: `${explanation.why}\n\n${explanation.saferAlternative}`,
-  });
+  return NextResponse.json({ oracleText });
 }

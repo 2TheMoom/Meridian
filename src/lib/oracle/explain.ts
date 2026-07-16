@@ -161,3 +161,14 @@ export async function explainMoment(input: ExplanationInput): Promise<Explanatio
     return FALLBACK_EXPLANATIONS[input.ruleId];
   }
 }
+
+// Common interface for anything that can produce moments.oracle_text from an
+// ExplanationInput — lets the pipeline stay agnostic to whether it's calling
+// Claude in-process (Next.js server, holds ANTHROPIC_API_KEY) or over HTTP
+// (the Railway worker, which deliberately does not — see explainClient.ts).
+export type ExplainFn = (input: ExplanationInput) => Promise<{ oracleText: string }>;
+
+export const explainMomentDirect: ExplainFn = async (input) => {
+  const explanation = await explainMoment(input);
+  return { oracleText: `${explanation.why}\n\n${explanation.saferAlternative}` };
+};

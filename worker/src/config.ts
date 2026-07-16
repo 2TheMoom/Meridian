@@ -12,4 +12,6 @@ export const config = {
   confirmationDepth: Number(process.env.HORIZON_CONFIRMATION_DEPTH ?? 3),
   windowFlushIntervalMs: Number(process.env.HORIZON_WINDOW_FLUSH_MS ?? 30_000),
   walletRefreshIntervalMs: Number(process.env.HORIZON_WALLET_REFRESH_MS ?? 60_000),
+  meridianAppUrl: requireEnv("MERIDIAN_APP_URL"), // the Vercel deployment; worker calls /api/oracle/explain on it rather than holding ANTHROPIC_API_KEY itself
+  oracleExplainSecret: requireEnv("ORACLE_EXPLAIN_SECRET"),
 };

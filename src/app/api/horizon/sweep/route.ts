@@ -5,6 +5,7 @@ import { getLastProcessedBlock } from "@/lib/horizon/syncState";
 import { getRegisteredWallets } from "@/lib/horizon/wallets";
 import { processWindow } from "@/lib/horizon/window";
 import { isAuthorizedBySecret } from "@/lib/internalAuth";
+import { explainMomentDirect } from "@/lib/oracle/explain";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 
 const CONFIRMATION_DEPTH = 3n;
@@ -30,7 +31,7 @@ async function sweepChain(supabase: ReturnType<typeof createServiceRoleSupabaseC
     if (from > confirmedHead) continue;
 
     const to = confirmedHead - from > MAX_BLOCKS_PER_INVOCATION ? from + MAX_BLOCKS_PER_INVOCATION : confirmedHead;
-    await processWindow(supabase, client, chainId, [wallet], from, to);
+    await processWindow(supabase, client, chainId, [wallet], from, to, explainMomentDirect);
     swept += 1;
   }
 
