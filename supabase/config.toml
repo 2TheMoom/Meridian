@@ -1,0 +1,7 @@
+project_id = "meridian"
+
+[auth]
+enabled = true
+
+[auth.web3.ethereum]
+enabled = true
