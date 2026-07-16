@@ -3,7 +3,7 @@ import { isAuthorizedBySecret } from "@/lib/internalAuth";
 import { explainMomentDirect } from "@/lib/oracle/explain";
 import type { RuleId } from "@/lib/oracle/types";
 
-const VALID_RULE_IDS: RuleId[] = ["R1", "R2", "R3", "R4", "R5"];
+const VALID_RULE_IDS: RuleId[] = ["R1", "R2", "R3", "R4", "R5", "R6"];
 const SUPPORTED_CHAIN_IDS = [143, 10143];
 const MAX_BODY_BYTES = 8192;
 

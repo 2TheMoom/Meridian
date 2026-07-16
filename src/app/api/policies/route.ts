@@ -3,7 +3,7 @@ import type { RuleId } from "@/lib/oracle/types";
 import { createUserScopedSupabaseClient } from "@/lib/supabase/server";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const VALID_RULE_IDS: RuleId[] = ["R1", "R2", "R3", "R4", "R5"];
+const VALID_RULE_IDS: RuleId[] = ["R1", "R2", "R3", "R4", "R5", "R6"];
 const VALID_TIERS = ["off", "notify", "confirm"] as const;
 const MAX_BODY_BYTES = 8192;
 
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   }
 
   const byRule = new Map((data ?? []).map((row) => [row.rule_id as RuleId, row]));
-  // Always return all five rules, defaulting anything without a row yet to
+  // Always return all six rules, defaulting anything without a row yet to
   // the DB's own default (tier 'notify', empty threshold) — the Guardrails
   // screen shouldn't have to special-case "no policy configured yet".
   const policies = VALID_RULE_IDS.map(

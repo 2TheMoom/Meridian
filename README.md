@@ -16,7 +16,7 @@ Meridian is a second thought bolted onto that speed. It **watches** every regist
 | Component | Role |
 |---|---|
 | **Horizon** | Watcher. A WebSocket worker that subscribes to new blocks on Monad, tracks registered wallets' approvals, transfers, and balances, and writes periodic snapshots. |
-| **Oracle** | Regret engine. A deterministic rules engine (R1–R5) scores each snapshot; Claude narrates the score in plain language but never computes or sees it. |
+| **Oracle** | Regret engine. A deterministic rules engine (R1–R6) scores each snapshot; Claude narrates the score in plain language but never computes or sees it. |
 | **Keel** | Protection. Notify (email), Confirm (one-tap on-chain revoke), and Hold (a spend-cap smart contract, unaudited first draft). |
 | **Meridian** | The product surface: Timeline, Guardrails, and Moment views. |
 
@@ -26,7 +26,7 @@ Meridian is a second thought bolted onto that speed. It **watches** every regist
 flowchart TD
     A[⛓️ New block on Monad] --> B[👁️ Horizon watches\napproval/transfer logs\nfor registered wallets]
     B --> C[📸 Window snapshot\napprovals · balances · outflow]
-    C --> D{🧮 Oracle scores\nR1-R5, deterministic}
+    C --> D{🧮 Oracle scores\nR1-R6, deterministic}
     D -- "below threshold" --> Z[No Moment]
     D -- "clears threshold" --> E[🗣️ Claude explains\nreceives inputs only —\nnever the score]
     E --> F[📬 Moment created\nTimeline + email]
@@ -49,7 +49,7 @@ flowchart TD
 
 ### 🧮 Oracle — the regret engine
 
-Five deterministic rules, pure functions, no LLM in the scoring path:
+Six deterministic rules, pure functions, no LLM in the scoring path:
 
 | Rule | Detects | Status |
 |---|---|---|
@@ -58,6 +58,7 @@ Five deterministic rules, pure functions, no LLM in the scoring path:
 | **R3** | Recurring payments trending upward, unacknowledged | Live, ERC-20 only |
 | **R4** | First-touch contracts (young + unverified) | Live; the value-ratio bonus stays 0 — needs raw call-data value tracking Horizon doesn't do yet |
 | **R5** | Balance floor breaches | Detects actual breaches; the 7-day projected-breach forecast isn't computed yet |
+| **R6** | NFT collection-wide approvals (`setApprovalForAll`) to unverified or freshly-deployed operators | Live; watches ApprovalForAll only — a single-token ERC-721 approval is bounded risk and out of scope for v1 |
 
 Claude narrates the score in plain language. It receives only raw rule inputs — never the numeric score itself — and cannot compute or influence a Moment's risk. Output is structured and constrained to a two-part, restraint-oriented format: explain the risk, don't manufacture urgency.
 
@@ -201,15 +202,16 @@ See `.env.example` for the full list with defaults. Grouped by area:
 
 ### Shipped
 
-- **✅ All five Oracle rules live.** R1–R5 all produce real Moments from real signals — none are wired-but-inert.
+- **✅ All six Oracle rules live.** R1–R6 all produce real Moments from real signals — none are wired-but-inert.
 - **✅ Confirm-tier revoke, verified on-chain.** Not client-trusted: the revoke transaction is fetched and decoded server-side before a Moment resolves.
 - **✅ `MeridianKeel.sol`.** Hold tier, first draft, 40 tests, 100% branch coverage, mainnet-only keystore-based deploy script.
+- **✅ NFT approval monitoring (R6).** Watches `ApprovalForAll` (ERC-721/1155) for collection-wide operator grants — the actual drainer pattern, not a single-token approval.
 
 ### Up next
 
 - **MeridianKeel's public self-audit**, then mainnet deployment — the contract and the deploy tooling exist; the audit doesn't yet.
 - **Telegram notifications**, alongside email.
-- **NFT approval monitoring (R6)** — Horizon currently only watches ERC-20 Transfer/Approval logs.
+- **Confirm-tier revoke for R6** — one-tap `setApprovalForAll(operator, false)`, mirroring R1's on-chain-verified revoke. R6 currently ships Notify-tier only.
 - **Rate limiting on public API routes** — today there's only a per-user wallet cap, no IP/token-bucket layer.
 - **R5's projected-breach forecast** — currently detects actual breaches only, no 7-day-ahead projection.
 

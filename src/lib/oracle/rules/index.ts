@@ -8,3 +8,4 @@ export {
 } from "./r3UnackedRecurringPayment";
 export { scoreR4FirstTouchContract, R4_DEFAULT_CONFIG, type R4Input, type R4Config } from "./r4FirstTouchContract";
 export { scoreR5FloorBreach, R5_DEFAULT_CONFIG, type R5Input, type R5Config } from "./r5FloorBreach";
+export { scoreR6NftApprovalRisk, R6_DEFAULT_CONFIG, type R6Input, type R6Config } from "./r6NftApprovalRisk";

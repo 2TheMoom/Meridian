@@ -1,4 +1,4 @@
-export type RuleId = "R1" | "R2" | "R3" | "R4" | "R5";
+export type RuleId = "R1" | "R2" | "R3" | "R4" | "R5" | "R6";
 
 export type RuleResult = {
   ruleId: RuleId;

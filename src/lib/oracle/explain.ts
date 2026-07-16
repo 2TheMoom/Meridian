@@ -83,6 +83,10 @@ export const FALLBACK_EXPLANATIONS: Record<RuleId, Explanation> = {
     why: "Your balance has dropped below the floor you set, or is on track to at the current rate of spending.",
     saferAlternative: "Consider pausing outgoing transactions until your balance recovers.",
   },
+  R6: {
+    why: "You gave this address blanket control over your entire NFT collection, not just one item, so it could move any of them at any time.",
+    saferAlternative: "Consider revoking this approval unless you specifically intended to grant ongoing access.",
+  },
 };
 
 export function violatesRestraintPrinciple(explanation: Explanation): boolean {

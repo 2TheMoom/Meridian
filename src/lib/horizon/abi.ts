@@ -8,6 +8,16 @@ export const approvalEvent = parseAbiItem(
   "event Approval(address indexed owner, address indexed spender, uint256 value)",
 );
 
+// Shared verbatim by ERC-721 and ERC-1155 — both standards define the exact
+// same signature for blanket, collection-wide operator approval. R6 watches
+// this only, not ERC-721's single-token `Approval(owner, approved, tokenId)`
+// — a single-token approval is bounded to one NFT, while ApprovalForAll is
+// the actual drainer pattern (whole-collection control), so it's the entry
+// condition that matters. See horizon/logs.ts and oracle/rules/r6NftApprovalRisk.ts.
+export const approvalForAllEvent = parseAbiItem(
+  "event ApprovalForAll(address indexed owner, address indexed operator, bool approved)",
+);
+
 export const erc20BalanceOfAbi = parseAbiItem(
   "function balanceOf(address account) view returns (uint256)",
 );

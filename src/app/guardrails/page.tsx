@@ -12,7 +12,7 @@ type Wallet = { id: string; address: string; label: string | null; notification_
 type Tier = "off" | "notify" | "confirm";
 type PolicyRow = { rule_id: RuleId; tier: Tier; threshold: Record<string, unknown> };
 
-const RULE_ORDER: RuleId[] = ["R1", "R2", "R3", "R4", "R5"];
+const RULE_ORDER: RuleId[] = ["R1", "R2", "R3", "R4", "R5", "R6"];
 const TIERS: Tier[] = ["off", "notify", "confirm"];
 
 export default function GuardrailsPage() {
@@ -232,9 +232,9 @@ export default function GuardrailsPage() {
           })}
 
           <p className="text-xs text-slate-500">
-            Acked recurring payments and snoozed counterparties aren&apos;t configurable yet — Horizon doesn&apos;t
-            detect recurring payments (R3) yet, and rule-level snooze suppression isn&apos;t wired into Oracle&apos;s
-            pipeline. Per-rule tier and the R5 floor above are live.
+            Marking a recurring payment (R3) as intentional isn&apos;t configurable here yet — detection is live, but
+            there&apos;s no UI action to acknowledge a specific pattern, so it keeps surfacing until it stops
+            recurring. Per-rule tier and the R5 floor above are live.
           </p>
 
           <button

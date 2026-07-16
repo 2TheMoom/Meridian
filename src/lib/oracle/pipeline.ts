@@ -9,6 +9,7 @@ import {
   scoreR3UnackedRecurringPayment,
   scoreR4FirstTouchContract,
   scoreR5FloorBreach,
+  scoreR6NftApprovalRisk,
 } from "./rules";
 import type { RuleResult } from "./types";
 import { getContractAgeDays } from "../horizon/contractAge";
@@ -33,11 +34,21 @@ export type ApprovalRecord = {
   allowlisted: boolean;
 };
 
+export type NftApprovalRecord = {
+  collection: string;
+  operator: string;
+  tx_hash: string;
+  block_number: string;
+  approved: boolean;
+  allowlisted: boolean;
+};
+
 export type SnapshotRow = {
   wallet_id: string;
   from_block: string;
   to_block: string;
   approvals: ApprovalRecord[];
+  nft_approvals: NftApprovalRecord[];
   balances: { native: string; tokens: Record<string, string> };
   outflow_usd: number;
 };
@@ -179,6 +190,44 @@ async function evaluateR1(
       wallet,
       { ...result, details: { ...result.details, token: approval.token, spender: approval.spender, amount: approval.amount } },
       approval.tx_hash,
+      explain,
+    );
+  }
+}
+
+/**
+ * R6 — NFT approval risk. Watches ApprovalForAll only (ERC-721 and ERC-1155
+ * share the exact same event signature, so this covers both without needing
+ * to distinguish them) — the collection-wide blanket-control grant is the
+ * actual drainer pattern; a single-token ERC-721 Approval is comparatively
+ * bounded and out of scope for v1 (see horizon/logs.ts). No Confirm-tier
+ * revoke button yet — same scope line R4 already draws (see MomentCard,
+ * which only wires up RevokeButton for R1).
+ */
+async function evaluateR6(
+  supabase: SupabaseClient,
+  client: PublicClient,
+  wallet: WalletInfo,
+  snapshot: SnapshotRow,
+  explain: ExplainFn,
+) {
+  const policy = await getPolicy(supabase, wallet.id, "R6");
+
+  for (const nftApproval of snapshot.nft_approvals) {
+    const contractAgeDays = await getContractAgeDays(client, nftApproval.operator as Address);
+    const result = scoreR6NftApprovalRisk({
+      approved: nftApproval.approved,
+      contractAgeDays,
+      allowlisted: nftApproval.allowlisted,
+    });
+    if (!shouldCreateMoment(policy, result)) continue;
+    if (await momentAlreadyExists(supabase, { walletId: wallet.id, ruleId: "R6", txRef: nftApproval.tx_hash })) continue;
+
+    await explainAndInsert(
+      supabase,
+      wallet,
+      { ...result, details: { ...result.details, token: nftApproval.collection, spender: nftApproval.operator } },
+      nftApproval.tx_hash,
       explain,
     );
   }
@@ -352,7 +401,7 @@ async function evaluateR3(supabase: SupabaseClient, wallet: WalletInfo, explain:
 }
 
 /**
- * Evaluates all five rules against one freshly-written snapshot and creates
+ * Evaluates all six rules against one freshly-written snapshot and creates
  * `moments` rows for anything that clears its policy's threshold. Called
  * right after Horizon upserts a snapshot (see horizon/window.ts). Rules are
  * evaluated independently and a failure in one does not block the others.
@@ -370,6 +419,7 @@ export async function createMomentsFromSnapshot(
     evaluateR5(supabase, wallet, snapshot, explain),
     evaluateR2(supabase, wallet, explain),
     evaluateR3(supabase, wallet, explain),
+    evaluateR6(supabase, client, wallet, snapshot, explain),
   ];
 
   const results = await Promise.allSettled(evaluations);

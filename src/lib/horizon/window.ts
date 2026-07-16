@@ -2,7 +2,14 @@ import type { Address, PublicClient } from "viem";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getWalletBalances } from "./balances";
 import { getTokenDecimals } from "./decimals";
-import { type ApprovalLog, getApprovalLogsForWallets, getTransferLogsForWallets, type TransferLog } from "./logs";
+import {
+  type ApprovalForAllLog,
+  type ApprovalLog,
+  getApprovalForAllLogsForWallets,
+  getApprovalLogsForWallets,
+  getTransferLogsForWallets,
+  type TransferLog,
+} from "./logs";
 import { computeOutflowUsd } from "./outflow";
 import { recordOutgoingTransfer } from "./patterns";
 import { setLastProcessedBlock } from "./syncState";
@@ -32,9 +39,10 @@ export async function processWindow(
   if (wallets.length === 0) return;
 
   const addresses = wallets.map((w) => w.address);
-  const [transferLogs, approvalLogs, allowlistRows] = await Promise.all([
+  const [transferLogs, approvalLogs, approvalForAllLogs, allowlistRows] = await Promise.all([
     getTransferLogsForWallets(client, addresses, fromBlock, toBlock),
     getApprovalLogsForWallets(client, addresses, fromBlock, toBlock),
+    getApprovalForAllLogsForWallets(client, addresses, fromBlock, toBlock),
     // Allowlist entries are chain-scoped: the same address can be an
     // unrelated contract on a different network, so never mix networks here.
     supabase.from("allowlist").select("address").eq("chain_id", chainId),
@@ -46,7 +54,19 @@ export async function processWindow(
 
   await Promise.all(
     wallets.map((wallet) =>
-      processWalletWindow(supabase, client, chainId, wallet, transferLogs, approvalLogs, allowlist, fromBlock, toBlock, explain),
+      processWalletWindow(
+        supabase,
+        client,
+        chainId,
+        wallet,
+        transferLogs,
+        approvalLogs,
+        approvalForAllLogs,
+        allowlist,
+        fromBlock,
+        toBlock,
+        explain,
+      ),
     ),
   );
 }
@@ -58,6 +78,7 @@ async function processWalletWindow(
   wallet: RegisteredWallet,
   transferLogs: TransferLog[],
   approvalLogs: ApprovalLog[],
+  approvalForAllLogs: ApprovalForAllLog[],
   allowlist: Set<string>,
   fromBlock: bigint,
   toBlock: bigint,
@@ -66,6 +87,7 @@ async function processWalletWindow(
   const addr = wallet.address.toLowerCase();
 
   const walletApprovalLogs = approvalLogs.filter((log) => log.args.owner.toLowerCase() === addr);
+  const walletApprovalForAllLogs = approvalForAllLogs.filter((log) => log.args.owner.toLowerCase() === addr);
   const walletTransferLogs = transferLogs.filter(
     (log) => log.args.from.toLowerCase() === addr || log.args.to.toLowerCase() === addr,
   );
@@ -110,11 +132,27 @@ async function processWalletWindow(
     };
   });
 
+  // ERC-721/1155 ApprovalForAll — never merged into touchedTokens/balances
+  // above: NFT collections aren't ERC-20 tokens, and calling decimals()/
+  // balanceOf(address)/a price lookup against one would misbehave or revert.
+  const nftApprovals = walletApprovalForAllLogs.map((log) => {
+    const operator = log.args.operator.toLowerCase();
+    return {
+      collection: log.address.toLowerCase(),
+      operator,
+      tx_hash: log.transactionHash,
+      block_number: log.blockNumber.toString(),
+      approved: log.args.approved,
+      allowlisted: allowlist.has(operator),
+    };
+  });
+
   const snapshot = {
     wallet_id: wallet.id,
     from_block: fromBlock.toString(),
     to_block: toBlock.toString(),
     approvals,
+    nft_approvals: nftApprovals,
     balances,
     outflow_usd: outflowUsd,
   };

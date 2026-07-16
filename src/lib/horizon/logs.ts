@@ -1,5 +1,5 @@
 import type { Address, Log, PublicClient } from "viem";
-import { approvalEvent, transferEvent } from "./abi";
+import { approvalEvent, approvalForAllEvent, transferEvent } from "./abi";
 
 const DEFAULT_CHUNK_BLOCKS = 500;
 
@@ -10,6 +10,7 @@ function chunkBlocks() {
 
 export type TransferLog = Log<bigint, number, false, typeof transferEvent, true>;
 export type ApprovalLog = Log<bigint, number, false, typeof approvalEvent, true>;
+export type ApprovalForAllLog = Log<bigint, number, false, typeof approvalForAllEvent, true>;
 
 /**
  * Runs `fn` once per [fromBlock, toBlock] sub-range no wider than LOGS_CHUNK_BLOCKS,
@@ -68,5 +69,20 @@ export async function getApprovalLogsForWallets(
 
   return inChunks(fromBlock, toBlock, (from, to) =>
     client.getLogs({ event: approvalEvent, args: { owner: wallets }, fromBlock: from, toBlock: to, strict: true }),
+  );
+}
+
+// ERC-721/1155 ApprovalForAll — owner is the only indexed arg we filter on,
+// same single-query shape as getApprovalLogsForWallets above.
+export async function getApprovalForAllLogsForWallets(
+  client: PublicClient,
+  wallets: Address[],
+  fromBlock: bigint,
+  toBlock: bigint,
+): Promise<ApprovalForAllLog[]> {
+  if (wallets.length === 0) return [];
+
+  return inChunks(fromBlock, toBlock, (from, to) =>
+    client.getLogs({ event: approvalForAllEvent, args: { owner: wallets }, fromBlock: from, toBlock: to, strict: true }),
   );
 }
