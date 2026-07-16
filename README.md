@@ -94,6 +94,19 @@ Dedup strategy varies by rule shape: R1/R4 key on `tx_ref` (one Moment per appro
 
 **Known scaling limitation:** the pipeline issues several sequential Supabase queries per wallet per window (policy lookups, dedup checks, a prior-snapshots scan for R4). Fine at v1 scale; worth batching or caching before this runs against hundreds of wallets on 20-second windows.
 
+### Timeline UI
+
+`/timeline` (`src/app/timeline/page.tsx`) is the reverse-chron feed from spec section 7: fetches the signed-in user's wallets and moments via the two new routes below, groups moments by calendar day, and shows a calm "All clear" state whenever there are no *open* moments — history with only acked/dismissed moments doesn't read as an alert. `MomentCard` renders the rule badge, score, Oracle's two-part explanation, and Acknowledge/Dismiss actions; amber by default, crimson only at score ≥ 85 per the spec's visual identity (not a Keel-severity color, an Oracle-severity one). Headings use Barlow Condensed and addresses use JetBrains Mono, both loaded via `next/font/google` in `layout.tsx` (previously declared as CSS variables with no font actually wired up — fixed here).
+
+New routes, both RLS-scoped to the caller's own wallets:
+
+- `GET /api/timeline?wallet=<walletId>` — up to 100 moments, newest first
+- `GET /api/moments/:id` / `PATCH /api/moments/:id` — single moment; PATCH only accepts `acked` or `dismissed` (not `acted`, which is reserved for Keel actually executing an on-chain remediation in v1.1, or `open`, the only creation state) — the client can never claim a remediation happened without one occurring)
+
+**What's explicitly not wired up yet:** R1 moments show a "Revoke (coming soon)" button, disabled rather than omitted, so the intended future action is visible — but it's not connected to a transaction. Keel's Confirm tier (one-tap revoke via `wagmi useWriteContract`) is Week 3 scope. Snooze (suppress a rule for a counterparty for 30 days, per spec section 6) isn't in the action set either — the DB status enum supports it, but Oracle's dedup logic doesn't yet check for it, so shipping the button would be a UI action that silently does less than it implies.
+
+**Verification:** typecheck, full build, and `npm audit` all pass. I started the dev server and confirmed both `/` and `/timeline` return 200 and render their expected server-side HTML shell (including the font/color classes). I do not have browser automation tooling in this environment, so the interactive parts — wallet connect, sign-in, the Moment card actions actually PATCHing, the day-grouping and all-clear logic against real data — have not been exercised in a live browser and should be checked before shipping.
+
 ## Security posture
 
 - **Dependencies:** `npm audit` is clean (0 vulnerabilities) as of this scaffold. `package.json` `overrides` force-patch transitive copies of `viem`/`ws`/`postcss`/`uuid` bundled inside WalletConnect/Reown's dependency chain — re-run `npm audit` after any dependency bump, since those overrides pin versions that need revisiting as upstream catches up.
@@ -110,4 +123,6 @@ Dedup strategy varies by rule shape: R1/R4 key on `tx_ref` (one Moment per appro
 
 Week 1 complete: app scaffold, Supabase schema + RLS, wallet connect + SIWE sign-in, wallet registration (with ownership verification), security headers, and the Horizon worker (WebSocket listener + cron fallback route).
 
-Week 2 in progress: Oracle's R1–R5 rules engine (pure functions, unit tested), allowlist seeding script, Claude explanation layer, Moment creation pipeline (R1 and R5-actual-breach live; R2/R3/R4 wired but waiting on upstream data — see table above). Not yet built: Timeline UI. See `meridian-mvp-spec.md` section 10 for the build plan.
+Week 2 complete: Oracle's R1–R5 rules engine (pure functions, unit tested), allowlist seeding script, Claude explanation layer, Moment creation pipeline (R1 and R5-actual-breach live; R2/R3/R4 wired but waiting on upstream data — see table above), Timeline UI (server-rendering verified, not yet exercised interactively in a browser).
+
+Week 3 next per the build plan: Keel v1 (Resend notifications, Confirm-tier one-tap revoke), Guardrails screen, price cache for USD normalization (which will also activate R2), alarm-fatigue controls (daily Moment cap, dedupe). See `meridian-mvp-spec.md` section 10.

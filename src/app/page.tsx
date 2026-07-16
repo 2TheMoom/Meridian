@@ -1,6 +1,7 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import Link from "next/link";
 import { useState } from "react";
 import { useAccount } from "wagmi";
 import { WalletRegistrationForm } from "@/components/WalletRegistrationForm";
@@ -42,6 +43,12 @@ export default function Home() {
             Wallet registered. Horizon will start watching it on the next
             sync window.
           </p>
+        )}
+
+        {session && (
+          <Link href="/timeline" className="w-fit text-sm text-amber underline">
+            View Timeline
+          </Link>
         )}
       </section>
     </main>

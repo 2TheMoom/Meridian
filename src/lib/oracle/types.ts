@@ -9,6 +9,21 @@ export type RuleResult = {
 
 export const DEFAULT_MOMENT_THRESHOLD = 50;
 
+export type MomentStatus = "open" | "acked" | "acted" | "dismissed" | "snoozed";
+
+// Mirrors the `moments` table row (spec section 8), as read by the client.
+export type Moment = {
+  id: string;
+  wallet_id: string;
+  rule_id: RuleId;
+  score: number;
+  context: Record<string, unknown>;
+  oracle_text: string | null;
+  status: MomentStatus;
+  tx_ref: string | null;
+  created_at: string;
+};
+
 export function clampScore(score: number): number {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
