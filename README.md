@@ -104,7 +104,16 @@ forge test
 forge coverage --report summary
 ```
 
-See [`contracts/README.md`](./contracts/README.md) — first draft, not yet audited.
+To deploy (Monad mainnet — no testnet stage; keystore-based, never a plaintext private key — see [`contracts/README.md`](./contracts/README.md)):
+
+```bash
+cd contracts
+cp .env.example .env   # MONAD_RPC_URL, ETHERSCAN_API_KEY
+cast wallet import meridian-deployer --interactive
+forge script script/DeployMeridianKeel.s.sol --rpc-url monad --broadcast --account meridian-deployer --verify
+```
+
+First draft, not yet audited — see [`contracts/README.md`](./contracts/README.md) for exactly what has and hasn't been verified.
 
 ## Environment variables
 

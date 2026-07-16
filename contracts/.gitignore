@@ -4,3 +4,8 @@ out/
 
 # lib/forge-std is intentionally committed (vendored, not a git submodule) —
 # see contracts/README.md for why.
+
+# Local anvil (chain 31337) deploy-script dry runs — noise, not provenance.
+# Real mainnet broadcast receipts (broadcast/*/143/) are intentionally kept
+# committed as a deployment record.
+broadcast/*/31337/

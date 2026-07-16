@@ -12,4 +12,12 @@ line_length = 120
 tab_width = 4
 bracket_spacing = false
 
+# Env vars read from contracts/.env (see .env.example) or the shell.
+[rpc_endpoints]
+monad = "${MONAD_RPC_URL}"
+
+# Etherscan V2 multichain API (chain 143 = Monad mainnet); same host serves monadscan.com.
+[etherscan]
+monad = { key = "${ETHERSCAN_API_KEY}", chain = 143, url = "https://api.etherscan.io/v2/api" }
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

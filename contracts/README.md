@@ -2,7 +2,7 @@
 
 Keel's Hold tier (v1.1, spec section 6): a user-funded daily spend-cap vault for native MON on Monad. This is the security-critical piece of Meridian — the only part of the product that ever holds user funds.
 
-> **Status: first draft, not yet audited.** This has a full test suite and passes it, but that is not the same thing as an audit. Per the spec's own build-in-public plan, this contract goes through a public four-gate self-audit — spec thread → invariant tests thread → self-audit findings thread → testnet → mainnet — before any real deployment. Nothing here should be treated as production-ready until that process is complete and published.
+> **Status: first draft, not yet audited.** This has a full test suite and passes it, but that is not the same thing as an audit. Per the spec's own build-in-public plan, this contract goes through a public self-audit — spec thread → invariant tests thread → self-audit findings thread — published alongside the deployment. Mainnet is the only deployment target (no testnet stage — see "Deploying" below); nothing here should be treated as production-ready until the self-audit is complete and published.
 
 ## Design
 
@@ -29,6 +29,31 @@ forge fmt                    # or --check in CI
 ```
 
 Requires `lib/forge-std`, vendored directly in this repo (not a git submodule — see `.gitignore`).
+
+## Deploying (Monad mainnet)
+
+```bash
+cp .env.example .env   # fill in MONAD_RPC_URL, ETHERSCAN_API_KEY
+
+# One-time: import the deployer key into an encrypted local keystore.
+# Prompts for the private key and a keystore password — neither touches
+# disk in plaintext, unlike a PRIVATE_KEY env var.
+cast wallet import meridian-deployer --interactive
+
+forge script script/DeployMeridianKeel.s.sol \
+  --rpc-url monad \
+  --broadcast \
+  --account meridian-deployer \
+  --verify
+```
+
+`--account` prompts for the keystore password at broadcast time (or set `ETH_PASSWORD`/`--password-file` for non-interactive runs). The broadcasting key becomes the contract's `owner` — see `DeployMeridianKeel.s.sol` for why that's a low-stakes role (no fund custody) and how to hand it off with `cast send <address> "transferOwnership(address)" <newOwner> --rpc-url monad --account meridian-deployer` afterward if needed.
+
+`--verify` submits source to Etherscan's V2 multichain API (serves monadscan.com) using the `[etherscan]` block in `foundry.toml`; omit it and run `forge verify-contract <address> src/MeridianKeel.sol:MeridianKeel --chain monad` separately if you'd rather verify after confirming the deployment looks right on-chain first.
+
+Broadcast receipts under `broadcast/*/143/` are committed as a deployment record; local anvil dry runs (`broadcast/*/31337/`) are gitignored.
+
+**There is no testnet deployment step here.** The four-gate self-audit plan below (spec → invariant tests → self-audit findings → public review) still applies before mainnet funds should be trusted to this contract — deploying doesn't substitute for it, it just means the audit has to happen with the real contract already on-chain rather than staged on testnet first.
 
 ## Test suite
 
