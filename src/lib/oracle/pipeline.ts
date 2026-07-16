@@ -1,3 +1,4 @@
+import type { Address, PublicClient } from "viem";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ExplainFn } from "./explain";
 import { RULE_LABELS } from "./labels";
@@ -10,6 +11,8 @@ import {
   scoreR5FloorBreach,
 } from "./rules";
 import type { RuleResult } from "./types";
+import { getContractAgeDays } from "../horizon/contractAge";
+import { getVerificationStatus } from "../horizon/explorerVerification";
 import { sendMomentNotification } from "../notifications/resend";
 
 export type WalletInfo = {
@@ -147,18 +150,25 @@ async function explainAndInsert(
 }
 
 /**
- * R1 — risky approval. Fully live: unlimited/allowlisted come straight off
- * the snapshot Horizon already wrote. Contract age is not yet available
- * (needs a block-explorer integration), so that scoring bonus never applies
- * today — R1 still fires correctly off the unlimited + allowlist signals.
+ * R1 — risky approval. Fully live, including the young-contract bonus:
+ * contract age comes from an RPC binary search on `eth_getCode` (see
+ * horizon/contractAge.ts), cached indefinitely per address, no third-party
+ * API required.
  */
-async function evaluateR1(supabase: SupabaseClient, wallet: WalletInfo, snapshot: SnapshotRow, explain: ExplainFn) {
+async function evaluateR1(
+  supabase: SupabaseClient,
+  client: PublicClient,
+  wallet: WalletInfo,
+  snapshot: SnapshotRow,
+  explain: ExplainFn,
+) {
   const policy = await getPolicy(supabase, wallet.id, "R1");
 
   for (const approval of snapshot.approvals) {
+    const contractAgeDays = await getContractAgeDays(client, approval.spender as Address);
     const result = scoreR1RiskyApproval({
       unlimited: approval.unlimited,
-      contractAgeDays: null,
+      contractAgeDays,
       allowlisted: approval.allowlisted,
     });
     if (!shouldCreateMoment(policy, result)) continue;
@@ -180,13 +190,20 @@ async function evaluateR1(supabase: SupabaseClient, wallet: WalletInfo, snapshot
  * Transfer/Approval logs, not native-value call data — see worker README).
  * "First touch" means first seen since Meridian started watching this
  * wallet, not full on-chain history — v1 doesn't backfill (see spec).
- * Contract age and explorer-verification bonuses are also unavailable, so
- * R4 currently only ever reaches its 30-point base score, which sits below
- * the default 50-point Moment threshold: R4 is wired correctly but won't
- * surface Moments until those enrichments land, unless a wallet's policy
- * lowers the threshold.
+ * Contract age and explorer-verification are both live now (see
+ * evaluateR1's comment on age; verification needs ETHERSCAN_API_KEY set,
+ * degrading to "unknown" rather than "unverified" without one). Value-ratio
+ * stays 0 until native-value tracking exists, so R4 still can't reach its
+ * highest scores, but it now clears the default 50-point threshold on a
+ * genuinely new, unverified contract.
  */
-async function evaluateR4(supabase: SupabaseClient, wallet: WalletInfo, snapshot: SnapshotRow, explain: ExplainFn) {
+async function evaluateR4(
+  supabase: SupabaseClient,
+  client: PublicClient,
+  wallet: WalletInfo,
+  snapshot: SnapshotRow,
+  explain: ExplainFn,
+) {
   if (snapshot.approvals.length === 0) return;
 
   const { data: priorRows, error } = await supabase
@@ -210,11 +227,16 @@ async function evaluateR4(supabase: SupabaseClient, wallet: WalletInfo, snapshot
     const isFirstTouch = !previouslySeen.has(spender) && !seenThisSnapshot.has(spender);
     seenThisSnapshot.add(spender);
 
+    const [contractAgeDays, verifiedOnExplorer] = await Promise.all([
+      getContractAgeDays(client, approval.spender as Address),
+      getVerificationStatus(wallet.chainId, approval.spender as Address),
+    ]);
+
     const result = scoreR4FirstTouchContract({
       isFirstTouchWithValue: isFirstTouch,
       valueRatioOfWallet: 0, // native-value tracking not yet implemented, see comment above
-      contractAgeDays: null,
-      verifiedOnExplorer: null,
+      contractAgeDays,
+      verifiedOnExplorer,
     });
     if (!shouldCreateMoment(policy, result)) continue;
     if (await momentAlreadyExists(supabase, { walletId: wallet.id, ruleId: "R4", txRef: approval.tx_hash })) continue;
@@ -337,13 +359,14 @@ async function evaluateR3(supabase: SupabaseClient, wallet: WalletInfo, explain:
  */
 export async function createMomentsFromSnapshot(
   supabase: SupabaseClient,
+  client: PublicClient,
   wallet: WalletInfo,
   snapshot: SnapshotRow,
   explain: ExplainFn,
 ): Promise<void> {
   const evaluations = [
-    evaluateR1(supabase, wallet, snapshot, explain),
-    evaluateR4(supabase, wallet, snapshot, explain),
+    evaluateR1(supabase, client, wallet, snapshot, explain),
+    evaluateR4(supabase, client, wallet, snapshot, explain),
     evaluateR5(supabase, wallet, snapshot, explain),
     evaluateR2(supabase, wallet, explain),
     evaluateR3(supabase, wallet, explain),

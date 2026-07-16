@@ -19,9 +19,11 @@ Meridian is a consumer-protection layer for [Monad](https://monad.xyz) (chain ID
 - Wallet registration with cryptographic ownership verification
 - Real-time approval and transfer monitoring via WebSocket block subscription
 - Deterministic risk scoring: risky approvals, velocity spikes, recurring payments, first-touch contracts, and balance floor breaches
+- Contract-age (on-chain, via `eth_getCode` binary search) and source-verification (block explorer API) enrichment for newly-touched contracts
 - Plain-language risk explanations via Claude, constrained to a two-part, restraint-oriented format
 - USD-normalized spend tracking via a CoinGecko-backed price cache
 - One-tap approval revocation, verified on-chain rather than client-trusted
+- `MeridianKeel.sol` — an optional daily spend-cap vault contract (Hold tier), first draft with a full test suite, not yet audited
 - Email notifications via Resend
 - Per-rule guardrail configuration (tier + thresholds)
 - Allowlist seeded from Monad's official protocols registry
@@ -30,10 +32,12 @@ Meridian is a consumer-protection layer for [Monad](https://monad.xyz) (chain ID
 
 - **App:** Next.js 16 (App Router), TypeScript, Tailwind CSS — deployed on Vercel
 - **Chain:** wagmi + viem, RainbowKit for wallet connection
+- **Contracts:** Solidity, Foundry (`contracts/`)
 - **Data:** Supabase (Postgres, Auth, Row Level Security)
 - **Worker:** Node.js WebSocket listener (Horizon) — deployed on Railway
 - **LLM:** Anthropic API (Claude Sonnet 5), explanations only
 - **Pricing:** CoinGecko API
+- **Explorer data:** Etherscan V2 multichain API (serves monadscan.com)
 - **Email:** Resend
 
 ## Getting started
@@ -91,6 +95,17 @@ Requires a WebSocket RPC endpoint and additional environment variables (see belo
 npm test
 ```
 
+### Contracts (MeridianKeel.sol)
+
+```bash
+cd contracts
+forge build
+forge test
+forge coverage --report summary
+```
+
+See [`contracts/README.md`](./contracts/README.md) — first draft, not yet audited.
+
 ## Environment variables
 
 See `.env.example` for the full list with defaults. Grouped by area:
@@ -104,6 +119,7 @@ See `.env.example` for the full list with defaults. Grouped by area:
 | Cron fallback | `HORIZON_SWEEP_SECRET` |
 | Oracle / Claude | `ANTHROPIC_API_KEY`, `ORACLE_EXPLAIN_SECRET`, `ORACLE_DAILY_MOMENT_CAP` |
 | Price cache | `COINGECKO_API_KEY` (optional — raises CoinGecko rate limits) |
+| Explorer verification | `ETHERSCAN_API_KEY` (optional — without it, R4's verification signal is "unknown," never "unverified") |
 | Notifications | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` |
 
 ## Project structure
@@ -116,12 +132,15 @@ src/
     api/                 API routes
   components/          UI components (MomentCard, RevokeButton, ...)
   lib/
-    horizon/             Block-window processing, decimals, outflow calc
+    horizon/             Block-window processing, decimals, outflow calc,
+                          recurring-payment detection, contract-age/
+                          verification lookups
     oracle/              Rules engine, explanation layer, Moment pipeline
     pricing/             CoinGecko price cache
     notifications/       Resend email
     supabase/            Client factories (browser, user-scoped, service role)
 worker/                 Horizon worker entrypoint (Railway)
+contracts/              MeridianKeel.sol (Foundry) — Hold tier, not yet audited
 scripts/                One-off scripts (allowlist seeding)
 supabase/migrations/    SQL migrations
 ```
@@ -142,7 +161,7 @@ supabase/migrations/    SQL migrations
 
 ## Security
 
-- **Row Level Security** on every user-scoped table (`wallets`, `snapshots`, `moments`, `policies`, `patterns`, `sync_state`); only service-role clients (Horizon, Oracle) bypass it.
+- **Row Level Security** on every user-scoped table (`wallets`, `snapshots`, `moments`, `policies`, `patterns`, `transfers`, `sync_state`); only service-role clients (Horizon, Oracle) bypass it.
 - **Wallet ownership is cryptographically verified** — registration derives the wallet address from the caller's verified SIWE identity, never from client input.
 - **Oracle's score never reaches the LLM.** Claude receives only raw rule inputs and returns plain-language text; it cannot see, compute, or influence a Moment's numeric score.
 - **On-chain actions are independently verified.** Approval revocations are confirmed by fetching and decoding the transaction from-chain before a Moment is marked resolved — a client's claim alone is never trusted.
@@ -150,19 +169,21 @@ supabase/migrations/    SQL migrations
 - **Chain-scoped caches.** The allowlist and price cache are keyed by `(address, chain_id)` / `(key, chain_id)`, not by address alone, since the same address can be an unrelated contract on a different network.
 - **Security headers** (CSP, HSTS, X-Frame-Options, Permissions-Policy) are set on all responses.
 - `npm audit` is clean; dependency overrides pin several transitive packages to patched versions.
+- **`MeridianKeel.sol`** follows checks-effects-interactions throughout and has a reentrancy guard shared across every fund-moving function, 100% branch coverage in its test suite, and no owner path to user funds. It is a first draft, not an audited contract — see [`contracts/README.md`](./contracts/README.md) for exactly what has and hasn't been verified.
 
-Known limitations: no IP/token-bucket rate limiting yet (only a per-user wallet cap); the CSP has not been exercised against a live wallet-connect flow in a browser.
+Known limitations: no IP/token-bucket rate limiting yet (only a per-user wallet cap); the CSP has not been exercised against a live wallet-connect flow in a browser; R4's contract-age lookup needs an archive-capable RPC endpoint to be reliable (falls back to "unknown" otherwise, never guesses).
 
 ## Status
 
-**Implemented:** wallet registration, SIWE auth, the Horizon worker, Oracle's rules engine (R1–R5), the Claude explanation layer, the Moment creation pipeline, Timeline UI, Guardrails UI, the price cache, Confirm-tier revoke, email notifications, and the daily Moment cap.
+**Implemented:** wallet registration, SIWE auth, the Horizon worker, Oracle's rules engine (R1–R5, all five now producing real Moments), the Claude explanation layer, the Moment creation pipeline, Timeline UI, Guardrails UI, the price cache, Confirm-tier revoke, email notifications, the daily Moment cap, and `MeridianKeel.sol` (unaudited first draft).
 
 **Partial:**
 - R2 (velocity spike) is live on mainnet only — there's no real market for testnet tokens to price against.
 - R5 (floor breach) detects actual breaches; the 7-day projected-breach forecast isn't computed yet.
-- R3 (recurring payments) and R4 (first-touch contracts) are fully wired into the scoring pipeline but depend on Horizon detection logic that hasn't been built yet (recurring-payment pattern detection, contract-age/verification lookups).
+- R4's value-ratio bonus stays at 0 — native-value-bearing first-touch calls aren't detectable yet (Horizon only watches ERC-20 Transfer/Approval logs, not raw call data).
+- R3's recurring-payment detection only covers ERC-20 transfers — native MON transfers emit no logs, so there's no recipient to match against.
 
 **Planned (v1.1):**
-- `MeridianKeel.sol` — the Hold tier: a daily spend-cap contract with a 24-hour timelock on overages and cap increases, published with a public self-audit before mainnet deployment.
+- `MeridianKeel.sol`'s public self-audit, testnet deployment, then mainnet — the contract exists, the audit doesn't.
 - Telegram notifications.
 - NFT approval monitoring (R6).

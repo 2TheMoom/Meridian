@@ -4,6 +4,7 @@ import { getWalletBalances } from "./balances";
 import { getTokenDecimals } from "./decimals";
 import { type ApprovalLog, getApprovalLogsForWallets, getTransferLogsForWallets, type TransferLog } from "./logs";
 import { computeOutflowUsd } from "./outflow";
+import { recordOutgoingTransfer } from "./patterns";
 import { setLastProcessedBlock } from "./syncState";
 import type { ExplainFn } from "../oracle/explain";
 import { createMomentsFromSnapshot } from "../oracle/pipeline";
@@ -126,6 +127,28 @@ async function processWalletWindow(
 
   await setLastProcessedBlock(supabase, wallet.id, toBlock);
 
+  // Recurring-payment detection (R3) needs discrete transfer history, not
+  // just this window's aggregate — record each outgoing ERC-20 transfer and
+  // let it update/create a `patterns` row before Oracle scores the window,
+  // so a pattern that just formed is visible to R3 immediately. Sequential,
+  // not parallel: the detection logic is read-then-write per (token,
+  // recipient), and two transfers to the same recipient in one window would
+  // race if processed concurrently.
+  try {
+    for (const log of walletTransferLogs) {
+      if (log.args.from.toLowerCase() !== addr) continue;
+      await recordOutgoingTransfer(supabase, wallet.id, {
+        token: log.address.toLowerCase(),
+        to: log.args.to.toLowerCase(),
+        amount: log.args.value,
+        txHash: log.transactionHash,
+        blockNumber: log.blockNumber,
+      });
+    }
+  } catch (err) {
+    console.error(`[horizon] pattern detection failed for wallet ${wallet.id}`, err);
+  }
+
   // Score the snapshot and create any moments it warrants. A failure here
   // must not roll back or block the snapshot/cursor writes above — those are
   // Horizon's job and are already durable; Oracle scoring can safely retry
@@ -133,6 +156,7 @@ async function processWalletWindow(
   try {
     await createMomentsFromSnapshot(
       supabase,
+      client,
       { id: wallet.id, address: wallet.address, chainId, label: wallet.label, notificationEmail: wallet.notificationEmail },
       snapshot,
       explain,
