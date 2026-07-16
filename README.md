@@ -67,7 +67,7 @@ A daily per-wallet Moment cap (default 10, across all rules combined) exists spe
 ### ⚓ Keel — protection, by tier
 
 - **Notify** (shipped) — email via Resend on every Moment, skipped for wallets without a notification email set
-- **Confirm** (shipped) — one-tap approval revocation from the Timeline. The revoke is independently verified by fetching and decoding the transaction on-chain before the Moment is marked resolved; a client's claim of "I revoked it" is never trusted on its own
+- **Confirm** (shipped) — one-tap revocation from the Timeline for R1 (`approve(spender, 0)`) and R6 (`setApprovalForAll(operator, false)`) Moments. The revoke is independently verified by fetching and decoding the transaction on-chain before the Moment is marked resolved; a client's claim of "I revoked it" is never trusted on its own
 - **Hold** (`MeridianKeel.sol`, unaudited first draft) — an opt-in, user-funded daily spend-cap vault for native MON. Spends within cap execute instantly; spends over cap, and any increase to the cap itself, are timelocked 24 hours and cancelable. Emergency withdrawal is always available but delayed 12 hours, and the request itself triggers an email alert — the delay plus visibility is the drainer-resistance mechanic. The owner has no path to user funds; owner powers are limited to pausing new deposits and updating a published, informational-only allowlist pointer
 
 > **Status:** first draft, 40 tests, 100% branch coverage — not the same thing as an audit. Deploys to Monad mainnet only (no testnet stage); goes through a public self-audit — spec thread → invariant tests thread → self-audit findings thread — published alongside the deployment. See [`contracts/README.md`](./contracts/README.md).
@@ -203,7 +203,7 @@ See `.env.example` for the full list with defaults. Grouped by area:
 ### Shipped
 
 - **✅ All six Oracle rules live.** R1–R6 all produce real Moments from real signals — none are wired-but-inert.
-- **✅ Confirm-tier revoke, verified on-chain.** Not client-trusted: the revoke transaction is fetched and decoded server-side before a Moment resolves.
+- **✅ Confirm-tier revoke, verified on-chain, for R1 and R6.** Not client-trusted: the revoke transaction (`approve(spender, 0)` or `setApprovalForAll(operator, false)`) is fetched and decoded server-side before a Moment resolves.
 - **✅ `MeridianKeel.sol`.** Hold tier, first draft, 40 tests, 100% branch coverage, mainnet-only keystore-based deploy script.
 - **✅ NFT approval monitoring (R6).** Watches `ApprovalForAll` (ERC-721/1155) for collection-wide operator grants — the actual drainer pattern, not a single-token approval.
 
@@ -211,7 +211,6 @@ See `.env.example` for the full list with defaults. Grouped by area:
 
 - **MeridianKeel's public self-audit**, then mainnet deployment — the contract and the deploy tooling exist; the audit doesn't yet.
 - **Telegram notifications**, alongside email.
-- **Confirm-tier revoke for R6** — one-tap `setApprovalForAll(operator, false)`, mirroring R1's on-chain-verified revoke. R6 currently ships Notify-tier only.
 - **Rate limiting on public API routes** — today there's only a per-user wallet cap, no IP/token-bucket layer.
 - **R5's projected-breach forecast** — currently detects actual breaches only, no 7-day-ahead projection.
 

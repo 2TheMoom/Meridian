@@ -2,17 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
-import { erc20ApproveAbi } from "@/lib/horizon/abi";
+import { erc20ApproveAbi, setApprovalForAllAbi } from "@/lib/horizon/abi";
+import type { RuleId } from "@/lib/oracle/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 export function RevokeButton({
   momentId,
+  ruleId,
   token,
   spender,
   chainId,
   onRevoked,
 }: {
   momentId: string;
+  ruleId: RuleId;
   token: string;
   spender: string;
   chainId: number;
@@ -63,13 +66,23 @@ export function RevokeButton({
   async function handleClick() {
     setError(null);
     try {
-      await writeContractAsync({
-        address: token as `0x${string}`,
-        abi: [erc20ApproveAbi],
-        functionName: "approve",
-        args: [spender as `0x${string}`, 0n],
-        chainId,
-      });
+      if (ruleId === "R6") {
+        await writeContractAsync({
+          address: token as `0x${string}`,
+          abi: [setApprovalForAllAbi],
+          functionName: "setApprovalForAll",
+          args: [spender as `0x${string}`, false],
+          chainId,
+        });
+      } else {
+        await writeContractAsync({
+          address: token as `0x${string}`,
+          abi: [erc20ApproveAbi],
+          functionName: "approve",
+          args: [spender as `0x${string}`, 0n],
+          chainId,
+        });
+      }
     } catch {
       setError("Revoke was rejected or failed to send.");
       reset();

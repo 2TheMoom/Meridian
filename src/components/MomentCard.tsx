@@ -95,9 +95,10 @@ export function MomentCard({
           >
             Dismiss
           </button>
-          {moment.rule_id === "R1" && token && spender && (
+          {(moment.rule_id === "R1" || moment.rule_id === "R6") && token && spender && (
             <RevokeButton
               momentId={moment.id}
+              ruleId={moment.rule_id}
               token={token}
               spender={spender}
               chainId={chainId}

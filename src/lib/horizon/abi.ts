@@ -31,4 +31,11 @@ export const erc20ApproveAbi = parseAbiItem(
   "function approve(address spender, uint256 amount) returns (bool)",
 );
 
+// Same client/server split as erc20ApproveAbi above — R6's Confirm-tier
+// revoke (RevokeButton.tsx, /api/moments/[id]/revoke) both encode/decode
+// this exact signature, shared verbatim by ERC-721 and ERC-1155.
+export const setApprovalForAllAbi = parseAbiItem(
+  "function setApprovalForAll(address operator, bool approved)",
+);
+
 export const UNLIMITED_APPROVAL_THRESHOLD = 2n ** 255n; // effectively "unlimited" for uint256 max-style approvals

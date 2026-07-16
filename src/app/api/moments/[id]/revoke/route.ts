@@ -1,6 +1,6 @@
 import { createPublicClient, decodeFunctionData, http } from "viem";
 import { NextRequest, NextResponse } from "next/server";
-import { erc20ApproveAbi } from "@/lib/horizon/abi";
+import { erc20ApproveAbi, setApprovalForAllAbi } from "@/lib/horizon/abi";
 import { monad, monadTestnet } from "@/lib/chain";
 import { createUserScopedSupabaseClient } from "@/lib/supabase/server";
 
@@ -20,13 +20,14 @@ function clientFor(chainId: number) {
 type RouteParams = { params: Promise<{ id: string }> };
 
 /**
- * Records a Confirm-tier revoke action against an R1 (risky approval)
- * Moment. Never trusts the client's word that a revoke happened — it fetches
- * the transaction from-chain and checks it actually is `approve(spender, 0)`
- * on the flagged token, sent from the wallet the Moment belongs to, before
- * marking the Moment `acted`. This is the only path in the app allowed to
- * set that status (see /api/moments/[id]'s PATCH, which explicitly excludes
- * it).
+ * Records a Confirm-tier revoke action against an R1 (risky approval) or R6
+ * (NFT approval risk) Moment. Never trusts the client's word that a revoke
+ * happened — it fetches the transaction from-chain and checks it actually is
+ * the right revoke call (`approve(spender, 0)` for R1, `setApprovalForAll
+ * (operator, false)` for R6) on the flagged contract, sent from the wallet
+ * the Moment belongs to, before marking the Moment `acted`. This is the only
+ * path in the app allowed to set that status (see /api/moments/[id]'s PATCH,
+ * which explicitly excludes it).
  */
 export async function POST(req: NextRequest, { params }: RouteParams) {
   const accessToken = getBearerToken(req);
@@ -65,8 +66,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!moment) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (moment.rule_id !== "R1") {
-    return NextResponse.json({ error: "Revoke only applies to R1 (risky approval) moments" }, { status: 400 });
+  if (moment.rule_id !== "R1" && moment.rule_id !== "R6") {
+    return NextResponse.json(
+      { error: "Revoke only applies to R1 (risky approval) and R6 (NFT approval risk) moments" },
+      { status: 400 },
+    );
   }
   if (moment.status !== "open") {
     return NextResponse.json({ error: "Moment is not open" }, { status: 409 });
@@ -107,20 +111,39 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Transaction was not sent from this wallet" }, { status: 400 });
   }
   if (!tx.to || tx.to.toLowerCase() !== context.token.toLowerCase()) {
-    return NextResponse.json({ error: "Transaction was not sent to the flagged token contract" }, { status: 400 });
+    return NextResponse.json({ error: "Transaction was not sent to the flagged contract" }, { status: 400 });
   }
 
-  try {
-    const decoded = decodeFunctionData({ abi: [erc20ApproveAbi], data: tx.input });
-    const [spender, amount] = decoded.args;
-    if (decoded.functionName !== "approve" || spender.toLowerCase() !== context.spender.toLowerCase() || amount !== 0n) {
-      return NextResponse.json(
-        { error: "Transaction is not an approve(spender, 0) call for the flagged spender" },
-        { status: 400 },
-      );
+  if (moment.rule_id === "R1") {
+    try {
+      const decoded = decodeFunctionData({ abi: [erc20ApproveAbi], data: tx.input });
+      const [spender, amount] = decoded.args;
+      if (decoded.functionName !== "approve" || spender.toLowerCase() !== context.spender.toLowerCase() || amount !== 0n) {
+        return NextResponse.json(
+          { error: "Transaction is not an approve(spender, 0) call for the flagged spender" },
+          { status: 400 },
+        );
+      }
+    } catch {
+      return NextResponse.json({ error: "Could not decode transaction as an ERC-20 approve call" }, { status: 400 });
     }
-  } catch {
-    return NextResponse.json({ error: "Could not decode transaction as an ERC-20 approve call" }, { status: 400 });
+  } else {
+    try {
+      const decoded = decodeFunctionData({ abi: [setApprovalForAllAbi], data: tx.input });
+      const [operator, approved] = decoded.args;
+      if (
+        decoded.functionName !== "setApprovalForAll" ||
+        operator.toLowerCase() !== context.spender.toLowerCase() ||
+        approved !== false
+      ) {
+        return NextResponse.json(
+          { error: "Transaction is not a setApprovalForAll(operator, false) call for the flagged operator" },
+          { status: 400 },
+        );
+      }
+    } catch {
+      return NextResponse.json({ error: "Could not decode transaction as a setApprovalForAll call" }, { status: 400 });
+    }
   }
 
   const { data: updated, error: updateError } = await supabase
