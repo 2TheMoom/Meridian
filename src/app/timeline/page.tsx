@@ -7,7 +7,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { Moment } from "@/lib/oracle/types";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
-type Wallet = { id: string; address: string; label: string | null };
+type Wallet = { id: string; address: string; label: string | null; chain_id: number };
 
 function dayKey(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -95,6 +95,7 @@ export default function TimelinePage() {
 
   const openCount = useMemo(() => moments?.filter((m) => m.status === "open").length ?? 0, [moments]);
   const grouped = useMemo(() => groupByDay(moments ?? []), [moments]);
+  const selectedWallet = wallets.find((w) => w.id === selectedWalletId);
 
   if (authLoading) {
     return (
@@ -124,9 +125,14 @@ export default function TimelinePage() {
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-16">
       <header className="flex items-center justify-between">
         <h1 className="font-heading text-3xl tracking-wide">Timeline</h1>
-        <Link href="/" className="text-sm text-slate-400 underline">
-          Manage wallets
-        </Link>
+        <nav className="flex gap-4 text-sm text-slate-400">
+          <Link href="/guardrails" className="underline">
+            Guardrails
+          </Link>
+          <Link href="/" className="underline">
+            Manage wallets
+          </Link>
+        </nav>
       </header>
 
       {wallets.length > 1 && (
@@ -172,8 +178,12 @@ export default function TimelinePage() {
                   <MomentCard
                     key={moment.id}
                     moment={moment}
+                    chainId={selectedWallet?.chain_id ?? 10143}
                     onAcknowledge={(id) => updateStatus(id, "acked")}
                     onDismiss={(id) => updateStatus(id, "dismissed")}
+                    onRevoked={(id) =>
+                      setMoments((prev) => prev?.map((m) => (m.id === id ? { ...m, status: "acted" } : m)) ?? null)
+                    }
                     isUpdating={pendingIds.has(moment.id)}
                   />
                 ))}

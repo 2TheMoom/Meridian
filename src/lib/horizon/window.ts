@@ -1,15 +1,23 @@
 import type { Address, PublicClient } from "viem";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getWalletBalances } from "./balances";
+import { getTokenDecimals } from "./decimals";
 import { type ApprovalLog, getApprovalLogsForWallets, getTransferLogsForWallets, type TransferLog } from "./logs";
+import { computeOutflowUsd } from "./outflow";
 import { setLastProcessedBlock } from "./syncState";
 import type { ExplainFn } from "../oracle/explain";
 import { createMomentsFromSnapshot } from "../oracle/pipeline";
+import { getPricesUsd } from "../pricing/priceCache";
 
 const UINT256_MAX = 2n ** 256n - 1n;
 const UNLIMITED_APPROVAL_RATIO = 10n;
 
-export type RegisteredWallet = { id: string; address: Address; label: string | null };
+export type RegisteredWallet = {
+  id: string;
+  address: Address;
+  label: string | null;
+  notificationEmail: string | null;
+};
 
 export async function processWindow(
   supabase: SupabaseClient,
@@ -64,7 +72,23 @@ async function processWalletWindow(
   const touchedTokens = [
     ...new Set([...walletApprovalLogs, ...walletTransferLogs].map((log) => log.address)),
   ] as Address[];
-  const balances = await getWalletBalances(client, wallet.address, touchedTokens);
+
+  const [balances, priorNativeBalance, prices, tokenDecimals] = await Promise.all([
+    getWalletBalances(client, wallet.address, touchedTokens),
+    getPriorNativeBalance(supabase, wallet.id),
+    getPricesUsd(supabase, chainId, touchedTokens),
+    getTokenDecimals(client, touchedTokens),
+  ]);
+
+  const outflowUsd = computeOutflowUsd({
+    walletAddress: wallet.address,
+    walletTransferLogs,
+    priorNativeBalance,
+    currentNativeBalance: BigInt(balances.native),
+    nativePriceUsd: prices.native,
+    tokenPricesUsd: prices.tokens,
+    tokenDecimals,
+  });
 
   const approvals = walletApprovalLogs.map((log) => {
     const token = log.address.toLowerCase();
@@ -91,7 +115,7 @@ async function processWalletWindow(
     to_block: toBlock.toString(),
     approvals,
     balances,
-    outflow_usd: 0, // USD normalization is Week 3 scope (price cache), see spec section 10
+    outflow_usd: outflowUsd,
   };
 
   const { error } = await supabase
@@ -109,11 +133,34 @@ async function processWalletWindow(
   try {
     await createMomentsFromSnapshot(
       supabase,
-      { id: wallet.id, chainId, label: wallet.label },
+      { id: wallet.id, address: wallet.address, chainId, label: wallet.label, notificationEmail: wallet.notificationEmail },
       snapshot,
       explain,
     );
   } catch (err) {
     console.error(`[horizon] moment pipeline failed for wallet ${wallet.id}`, err);
   }
+}
+
+/**
+ * Most recent snapshot's native balance for this wallet, queried before the
+ * current window's snapshot is written — the baseline computeOutflowUsd
+ * diffs against. Returns null for a wallet's first-ever snapshot (no
+ * baseline yet, so native outflow for that window is skipped rather than
+ * guessed).
+ */
+async function getPriorNativeBalance(supabase: SupabaseClient, walletId: string): Promise<bigint | null> {
+  const { data, error } = await supabase
+    .from("snapshots")
+    .select("balances")
+    .eq("wallet_id", walletId)
+    .order("to_block", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(`prior-balance lookup failed for wallet ${walletId}: ${error.message}`);
+  if (!data) return null;
+
+  const balances = data.balances as { native: string };
+  return BigInt(balances.native);
 }

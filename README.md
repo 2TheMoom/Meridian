@@ -1,41 +1,77 @@
 # Meridian
 
-The chain is too fast for second thoughts. Meridian is your second thought, running before you sign.
+**The chain is too fast for second thoughts. Meridian is your second thought, running before you sign.**
 
-Consumer-protection layer for Monad (chain ID 143): watches wallets, scores risky on-chain activity deterministically, and lets you act before a mistake settles. Full spec: `meridian-mvp-spec.md`.
+Meridian is a consumer-protection layer for [Monad](https://monad.xyz) (chain ID 143). It watches registered wallets, scores risky on-chain activity with a deterministic rules engine, explains that risk in plain language, and lets users act — revoke an approval, acknowledge a pattern, adjust a guardrail — before a mistake settles.
 
-## Stack
+Full product specification: [`meridian-mvp-spec.md`](./meridian-mvp-spec.md).
 
-- Next.js 16 (App Router) + wagmi/viem + RainbowKit, deployed on Vercel
-- Supabase (Postgres + Auth via native Sign-In with Ethereum / `signInWithWeb3`)
-- Horizon (watcher worker, Railway): `worker/src/index.ts`, WebSocket `newHeads` listener over viem, sharing detection logic with the app via `src/lib/horizon/`
-- Anthropic API for Oracle's plain-language explanations only (never scoring)
+## How it works
 
-## Local setup
+| Component | Role |
+|---|---|
+| **Horizon** | Watcher. A WebSocket worker that subscribes to new blocks on Monad, tracks registered wallets' approvals, transfers, and balances, and writes periodic snapshots. |
+| **Oracle** | Regret engine. A deterministic rules engine (R1–R5) scores each snapshot; Claude narrates the score in plain language but never computes or sees it. |
+| **Keel** | Protection. Notify (email), Confirm (one-tap on-chain actions like revoking an approval), and — in v1.1 — Hold (a spend-cap smart contract). |
+| **Meridian** | The product surface: Timeline, Guardrails, and Moment views. |
+
+## Features
+
+- Sign-In with Ethereum (SIWE) via Supabase Auth — no email/password
+- Wallet registration with cryptographic ownership verification
+- Real-time approval and transfer monitoring via WebSocket block subscription
+- Deterministic risk scoring: risky approvals, velocity spikes, recurring payments, first-touch contracts, and balance floor breaches
+- Plain-language risk explanations via Claude, constrained to a two-part, restraint-oriented format
+- USD-normalized spend tracking via a CoinGecko-backed price cache
+- One-tap approval revocation, verified on-chain rather than client-trusted
+- Email notifications via Resend
+- Per-rule guardrail configuration (tier + thresholds)
+- Allowlist seeded from Monad's official protocols registry
+
+## Tech stack
+
+- **App:** Next.js 16 (App Router), TypeScript, Tailwind CSS — deployed on Vercel
+- **Chain:** wagmi + viem, RainbowKit for wallet connection
+- **Data:** Supabase (Postgres, Auth, Row Level Security)
+- **Worker:** Node.js WebSocket listener (Horizon) — deployed on Railway
+- **LLM:** Anthropic API (Claude Sonnet 5), explanations only
+- **Pricing:** CoinGecko API
+- **Email:** Resend
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 20+
+- A Supabase project
+- A Monad RPC endpoint (HTTP and WebSocket)
+
+### Installation
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in Supabase, WalletConnect, RPC values
+cp .env.example .env.local
 ```
 
-### Supabase
+Fill in `.env.local` — see [Environment variables](#environment-variables).
+
+### Database setup
 
 ```bash
-npx supabase init          # if not already linked
+npx supabase init
 npx supabase link --project-ref <your-project-ref>
-npx supabase db push       # applies supabase/migrations/0001_init.sql and 0002_allowlist_composite_key.sql
+npx supabase db push
 ```
 
-Enable the Web3 Wallet (Ethereum) provider in Dashboard → Authentication → Providers, or via `supabase/config.toml` for local dev (`supabase start`).
+Enable the Web3 Wallet (Ethereum) provider under Dashboard → Authentication → Providers.
 
 ### Seed the allowlist
 
 ```bash
-npm run seed:allowlist                  # live protocols only (default)
-npm run seed:allowlist -- --include-non-live
+npm run seed:allowlist
 ```
 
-Pulls from [monad-crypto/protocols](https://github.com/monad-crypto/protocols) — the "official protocols repo" spec section 5 refers to — for both `mainnet` and `testnet`, flattens each protocol's `addresses` map to one allowlist row per address, and upserts on `(address, chain_id)`. Needs `SUPABASE_SERVICE_ROLE_KEY`. Uses `isAddress(addr, { strict: false })`: the source repo's addresses aren't consistently EIP-55 checksummed, and strict validation was silently dropping ~50 legitimate entries (including all of Chainlink's mainnet oracle feeds) before this was caught — format validity is what matters here, not checksum casing, since everything gets lowercased before storage anyway. Re-run periodically as new protocols are added upstream; it's idempotent.
+Pulls known Monad protocol addresses from [monad-crypto/protocols](https://github.com/monad-crypto/protocols) into the `allowlist` table, per network. Idempotent — safe to re-run.
 
 ### Run the app
 
@@ -46,83 +82,89 @@ npm run dev
 ### Run the Horizon worker
 
 ```bash
-npm run worker        # or `npm run worker:dev` for auto-restart on change
+npm run worker
 ```
 
-Needs `HORIZON_WS_RPC_URL` (a WebSocket RPC endpoint — Chainstack/QuickNode, not the HTTP one used by the app), `SUPABASE_SERVICE_ROLE_KEY`, `MERIDIAN_APP_URL`, and `ORACLE_EXPLAIN_SECRET` (the worker calls the app's `/api/oracle/explain` for narration rather than holding `ANTHROPIC_API_KEY` itself — see below). Defaults to Monad testnet (`HORIZON_CHAIN_ID=10143`); set it to `143` for mainnet. It:
+Requires a WebSocket RPC endpoint and additional environment variables (see below). Deploy to a host that supports long-lived processes (e.g. Railway) — it cannot run on Vercel's serverless functions.
 
-- subscribes to `newHeads`, batches blocks into windows (`HORIZON_WINDOW_BLOCKS`, default 50), and treats a block final after `HORIZON_CONFIRMATION_DEPTH` (default 3) confirmations
-- per window, fetches Transfer/Approval logs for all registered wallets (chunked via `LOGS_CHUNK_BLOCKS`) and native + touched-token balances, then upserts a `snapshots` row and advances `sync_state`
-- after each snapshot write, runs the Moment pipeline against it (see below) before moving to the next window
-- a new wallet with no `sync_state` starts from the current confirmed head, not genesis — v1 detects going forward, it doesn't backfill history
-- on any per-window error it logs and keeps running; `POST /api/horizon/sweep` (secret-header-authed, meant to be hit by an external cron every 5 min) is the from-DB-state reconciliation path if the worker itself was down
-
-Deploy this to Railway with start command `npm run worker` — it needs a long-lived process, which is why it can't run on Vercel.
-
-### Run the Oracle rules engine tests
+### Run tests
 
 ```bash
 npm test
 ```
 
-`src/lib/oracle/rules/` implements R1–R5 (spec section 5) as pure, side-effect-free functions — each takes a plain input object and a partial config override (for the `policies.threshold` overrides) and returns `{ ruleId, score, triggered, details }`. No DB or network access, no LLM in the loop — the explanation layer (Claude) only narrates a score these functions already produced, never computes or adjusts it. Uses Node's built-in test runner (`node:test`), no extra test-framework dependency.
+## Environment variables
 
-### Oracle's explanation layer
+See `.env.example` for the full list with defaults. Grouped by area:
 
-`POST /api/oracle/explain` (internal only, `x-oracle-secret` header auth, never client-callable) calls Claude Sonnet 5 to narrate a Moment a rules-engine call already scored. `src/lib/oracle/explain.ts` is the core:
+| Area | Variables |
+|---|---|
+| Supabase | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
+| Wallet connect | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` |
+| Monad RPC | `NEXT_PUBLIC_MONAD_RPC_URL`, `NEXT_PUBLIC_MONAD_TESTNET_RPC_URL` (+ explorer URLs) |
+| Horizon worker | `HORIZON_CHAIN_ID`, `HORIZON_WS_RPC_URL`, `MERIDIAN_APP_URL`, `ORACLE_EXPLAIN_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` |
+| Cron fallback | `HORIZON_SWEEP_SECRET` |
+| Oracle / Claude | `ANTHROPIC_API_KEY`, `ORACLE_EXPLAIN_SECRET`, `ORACLE_DAILY_MOMENT_CAP` |
+| Price cache | `COINGECKO_API_KEY` (optional — raises CoinGecko rate limits) |
+| Notifications | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` |
 
-- **The score never reaches the model.** `ExplanationInput` has no field for it — the caller passes `ruleId` + `details` (the rule's raw inputs) only, not the `RuleResult.score`. This is enforced by the type, not just an instruction.
-- **Structured output** (`output_config.format: json_schema`) forces the exact `{ why, saferAlternative }` two-part shape the spec requires, rather than parsing prose.
-- **Restraint-only guardrail:** a regex backstop (`violatesRestraintPrinciple`) checks the response for leverage/yield-farming/hedging/repositioning language or em dashes before it's trusted — on a match (or an API failure, a refusal, or a malformed response) it falls back to a deterministic, on-brand template per rule ID, so a Moment always gets `oracle_text` populated. Tested in `explain.test.ts` without hitting the network.
-- Uses `thinking: {type: "disabled"}` and `effort: "low"` — this is a short, bounded, templated narration task, not one that benefits from extended reasoning.
+## Project structure
 
-### Moment creation pipeline
+```
+src/
+  app/                Next.js routes (pages + API)
+    timeline/          Timeline screen
+    guardrails/         Guardrails screen
+    api/                 API routes
+  components/          UI components (MomentCard, RevokeButton, ...)
+  lib/
+    horizon/             Block-window processing, decimals, outflow calc
+    oracle/              Rules engine, explanation layer, Moment pipeline
+    pricing/             CoinGecko price cache
+    notifications/       Resend email
+    supabase/            Client factories (browser, user-scoped, service role)
+worker/                 Horizon worker entrypoint (Railway)
+scripts/                One-off scripts (allowlist seeding)
+supabase/migrations/    SQL migrations
+```
 
-`src/lib/oracle/pipeline.ts` (`createMomentsFromSnapshot`) is what turns a Horizon snapshot into `moments` rows: it evaluates all five rules, checks each wallet's `policies` row (tier + an optional `threshold.momentThreshold` override — `off` suppresses the rule entirely, otherwise the default cutoff is 50), dedupes against existing moments, calls the explanation layer, and inserts. It's called automatically from `horizon/window.ts` right after every snapshot upsert (worker and cron-sweep paths both wire it in — the worker passes an HTTP explain client so it never needs `ANTHROPIC_API_KEY`, the sweep route calls the explanation layer in-process since it already runs inside the app).
+## API routes
 
-**Honest status per rule** — not every rule can produce real Moments yet, because the upstream data isn't all there:
+| Route | Purpose |
+|---|---|
+| `POST /api/wallets` | Register a wallet (ownership-verified via SIWE identity) |
+| `GET /api/wallets` | List the caller's registered wallets |
+| `PATCH /api/wallets/:id` | Update wallet settings (e.g. notification email) |
+| `GET /api/timeline?wallet=` | Fetch a wallet's Moments, newest first |
+| `GET/PATCH /api/moments/:id` | Read or update a Moment's status (`acked`/`dismissed`) |
+| `POST /api/moments/:id/revoke` | Verify and record an on-chain approval revocation |
+| `GET/PUT /api/policies?wallet=` | Read or update guardrail configuration |
+| `POST /api/oracle/explain` | Internal — Claude explanation layer |
+| `POST /api/horizon/sweep` | Internal — cron-triggered backfill for the Horizon worker |
 
-| Rule | Status | Why |
-|---|---|---|
-| R1 (risky approval) | **Live** | Unlimited/allowlist flags come straight off the snapshot Horizon already computes. Contract-age bonus is unavailable (no explorer integration yet), so R1 fires correctly off the other two signals alone. |
-| R5 (floor breach) | **Live for actual breaches** | Compares snapshot balance to `policies.threshold.floorNative`. "Projected breach within 7d" needs velocity data (see R2) and is always `false` for now. |
-| R2 (velocity spike) | **Wired, inert** | `snapshots.outflow_usd` is always 0 until the Week 3 price cache lands — the pipeline aggregates 7d/30d outflow correctly, it's just summing zeros. Activates automatically once USD normalization exists. |
-| R3 (unacked recurring payment) | **Wired, inert** | Evaluates whatever `patterns` rows exist, but Horizon doesn't yet detect recurring payments and write them (spec section 4, point 3). Activates once that detection is built. |
-| R4 (first-touch contract) | **Wired, mostly inert** | "First touch" is computed correctly (never seen this spender in an earlier snapshot for this wallet), but value-ratio, contract-age, and explorer-verification bonuses are all unavailable, so R4 only ever reaches its 30-point base score — below the default 50-point threshold. Also approval-gated only: a native-value-bearing call to a new contract isn't detectable yet (Horizon only watches ERC-20 Transfer/Approval logs, not call data). |
+## Security
 
-Dedup strategy varies by rule shape: R1/R4 key on `tx_ref` (one Moment per approval transaction), R2/R3/R5 key on "no other open Moment for this (wallet, rule)" so a sustained condition doesn't spam a new Moment every ~20-second window.
+- **Row Level Security** on every user-scoped table (`wallets`, `snapshots`, `moments`, `policies`, `patterns`, `sync_state`); only service-role clients (Horizon, Oracle) bypass it.
+- **Wallet ownership is cryptographically verified** — registration derives the wallet address from the caller's verified SIWE identity, never from client input.
+- **Oracle's score never reaches the LLM.** Claude receives only raw rule inputs and returns plain-language text; it cannot see, compute, or influence a Moment's numeric score.
+- **On-chain actions are independently verified.** Approval revocations are confirmed by fetching and decoding the transaction from-chain before a Moment is marked resolved — a client's claim alone is never trusted.
+- **Internal-only routes** (`/api/oracle/explain`, `/api/horizon/sweep`) require a shared secret compared with `crypto.timingSafeEqual`.
+- **Chain-scoped caches.** The allowlist and price cache are keyed by `(address, chain_id)` / `(key, chain_id)`, not by address alone, since the same address can be an unrelated contract on a different network.
+- **Security headers** (CSP, HSTS, X-Frame-Options, Permissions-Policy) are set on all responses.
+- `npm audit` is clean; dependency overrides pin several transitive packages to patched versions.
 
-**Known scaling limitation:** the pipeline issues several sequential Supabase queries per wallet per window (policy lookups, dedup checks, a prior-snapshots scan for R4). Fine at v1 scale; worth batching or caching before this runs against hundreds of wallets on 20-second windows.
-
-### Timeline UI
-
-`/timeline` (`src/app/timeline/page.tsx`) is the reverse-chron feed from spec section 7: fetches the signed-in user's wallets and moments via the two new routes below, groups moments by calendar day, and shows a calm "All clear" state whenever there are no *open* moments — history with only acked/dismissed moments doesn't read as an alert. `MomentCard` renders the rule badge, score, Oracle's two-part explanation, and Acknowledge/Dismiss actions; amber by default, crimson only at score ≥ 85 per the spec's visual identity (not a Keel-severity color, an Oracle-severity one). Headings use Barlow Condensed and addresses use JetBrains Mono, both loaded via `next/font/google` in `layout.tsx` (previously declared as CSS variables with no font actually wired up — fixed here).
-
-New routes, both RLS-scoped to the caller's own wallets:
-
-- `GET /api/timeline?wallet=<walletId>` — up to 100 moments, newest first
-- `GET /api/moments/:id` / `PATCH /api/moments/:id` — single moment; PATCH only accepts `acked` or `dismissed` (not `acted`, which is reserved for Keel actually executing an on-chain remediation in v1.1, or `open`, the only creation state) — the client can never claim a remediation happened without one occurring)
-
-**What's explicitly not wired up yet:** R1 moments show a "Revoke (coming soon)" button, disabled rather than omitted, so the intended future action is visible — but it's not connected to a transaction. Keel's Confirm tier (one-tap revoke via `wagmi useWriteContract`) is Week 3 scope. Snooze (suppress a rule for a counterparty for 30 days, per spec section 6) isn't in the action set either — the DB status enum supports it, but Oracle's dedup logic doesn't yet check for it, so shipping the button would be a UI action that silently does less than it implies.
-
-**Verification:** typecheck, full build, and `npm audit` all pass. I started the dev server and confirmed both `/` and `/timeline` return 200 and render their expected server-side HTML shell (including the font/color classes). I do not have browser automation tooling in this environment, so the interactive parts — wallet connect, sign-in, the Moment card actions actually PATCHing, the day-grouping and all-clear logic against real data — have not been exercised in a live browser and should be checked before shipping.
-
-## Security posture
-
-- **Dependencies:** `npm audit` is clean (0 vulnerabilities) as of this scaffold. `package.json` `overrides` force-patch transitive copies of `viem`/`ws`/`postcss`/`uuid` bundled inside WalletConnect/Reown's dependency chain — re-run `npm audit` after any dependency bump, since those overrides pin versions that need revisiting as upstream catches up.
-- **RLS:** every wallet-scoped table (`snapshots`, `patterns`, `moments`, `policies`, `sync_state`) is gated on `wallets.user_id = auth.uid()` via a join; only the Horizon/Oracle service-role client bypasses it.
-- **Wallet registration ownership check:** `POST /api/wallets` derives the address from the caller's *verified* SIWE identity (`src/lib/auth.ts`, parsed from Supabase's `web3:ethereum:{address}` identity record) and rejects any request where the submitted address doesn't match — a client can't register a wallet it didn't sign for.
-- **Input handling:** address format (viem `isAddress`), chain ID allowlist (143/10143 only), label length cap, and a request body size cap are enforced before any DB write.
-- **Abuse mitigation:** a per-user cap (10 wallets) stops one account from writing unbounded rows. This is *not* a substitute for real IP/token-bucket rate limiting — add that (e.g. Upstash Ratelimit on the Vercel edge) before mainnet launch.
-- **HTTP headers:** CSP, HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and a restrictive `Permissions-Policy` are set in `next.config.mjs`. The CSP's `connect-src`/`frame-src` allowlist for WalletConnect/Reown/Coinbase endpoints is based on their documented relay domains but **has not been exercised against a live wallet-connect flow in a browser** — verify it doesn't block a real connect/sign-in before shipping, and tighten `script-src`/`style-src` further if RainbowKit doesn't need `'unsafe-inline'` in practice.
-- **Horizon worker isolation:** the worker only ever holds the Supabase service-role key server-side (Railway env, never shipped to the browser). `POST /api/horizon/sweep` compares its secret header with `crypto.timingSafeEqual` rather than `===`, and only accepts chain IDs 143/10143.
-- **Allowlist is chain-scoped:** `allowlist`'s primary key is `(address, chain_id)`, not `address` alone (migration `0002`) — 60 addresses in the real monad-crypto/protocols data exist on *both* mainnet and testnet as unrelated contracts; a single-column key would have let seeding one network silently overwrite the other's `chain_id`. `src/lib/horizon/window.ts`'s allowlist lookup filters by the wallet's own `chain_id` for the same reason — a mainnet-allowlisted address must not suppress the "not allowlisted" signal for a same-address testnet contract.
-- **`POST /api/oracle/explain` is internal only** (secret header, `crypto.timingSafeEqual`, same pattern as the sweep route — factored into `src/lib/internalAuth.ts`). It never receives a Moment's numeric score, so even a fully compromised Anthropic API key or a prompt-injected response can't leak or spoof scoring — the rules engine's output is the sole source of truth for that.
+Known limitations: no IP/token-bucket rate limiting yet (only a per-user wallet cap); the CSP has not been exercised against a live wallet-connect flow in a browser.
 
 ## Status
 
-Week 1 complete: app scaffold, Supabase schema + RLS, wallet connect + SIWE sign-in, wallet registration (with ownership verification), security headers, and the Horizon worker (WebSocket listener + cron fallback route).
+**Implemented:** wallet registration, SIWE auth, the Horizon worker, Oracle's rules engine (R1–R5), the Claude explanation layer, the Moment creation pipeline, Timeline UI, Guardrails UI, the price cache, Confirm-tier revoke, email notifications, and the daily Moment cap.
 
-Week 2 complete: Oracle's R1–R5 rules engine (pure functions, unit tested), allowlist seeding script, Claude explanation layer, Moment creation pipeline (R1 and R5-actual-breach live; R2/R3/R4 wired but waiting on upstream data — see table above), Timeline UI (server-rendering verified, not yet exercised interactively in a browser).
+**Partial:**
+- R2 (velocity spike) is live on mainnet only — there's no real market for testnet tokens to price against.
+- R5 (floor breach) detects actual breaches; the 7-day projected-breach forecast isn't computed yet.
+- R3 (recurring payments) and R4 (first-touch contracts) are fully wired into the scoring pipeline but depend on Horizon detection logic that hasn't been built yet (recurring-payment pattern detection, contract-age/verification lookups).
 
-Week 3 next per the build plan: Keel v1 (Resend notifications, Confirm-tier one-tap revoke), Guardrails screen, price cache for USD normalization (which will also activate R2), alarm-fatigue controls (daily Moment cap, dedupe). See `meridian-mvp-spec.md` section 10.
+**Planned (v1.1):**
+- `MeridianKeel.sol` — the Hold tier: a daily spend-cap contract with a 24-hour timelock on overages and cap increases, published with a public self-audit before mainnet deployment.
+- Telegram notifications.
+- NFT approval monitoring (R6).

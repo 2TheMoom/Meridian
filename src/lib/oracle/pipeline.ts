@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ExplainFn } from "./explain";
+import { RULE_LABELS } from "./labels";
 import { getPolicy, momentThresholdFor, type Policy } from "./policies";
 import {
   scoreR1RiskyApproval,
@@ -9,8 +10,15 @@ import {
   scoreR5FloorBreach,
 } from "./rules";
 import type { RuleResult } from "./types";
+import { sendMomentNotification } from "../notifications/resend";
 
-export type WalletInfo = { id: string; chainId: number; label: string | null };
+export type WalletInfo = {
+  id: string;
+  address: string;
+  chainId: number;
+  label: string | null;
+  notificationEmail: string | null;
+};
 
 export type ApprovalRecord = {
   token: string;
@@ -33,6 +41,26 @@ export type SnapshotRow = {
 
 export function shouldCreateMoment(policy: Policy, result: RuleResult): boolean {
   return result.triggered && policy.tier !== "off" && result.score >= momentThresholdFor(policy);
+}
+
+// Alarm-fatigue control (spec section 7: "cap Moments surfaced per day").
+// Deduplication is handled per-rule in momentAlreadyExists below (one moment
+// per approval tx for R1/R4, one open moment per rule for R2/R3/R5); this is
+// the separate total-volume cap across all rules for one wallet.
+const DAILY_MOMENT_CAP = Number(process.env.ORACLE_DAILY_MOMENT_CAP ?? 10);
+
+async function dailyCapReached(supabase: SupabaseClient, walletId: string): Promise<boolean> {
+  const startOfToday = new Date();
+  startOfToday.setUTCHours(0, 0, 0, 0);
+
+  const { count, error } = await supabase
+    .from("moments")
+    .select("id", { count: "exact", head: true })
+    .eq("wallet_id", walletId)
+    .gte("created_at", startOfToday.toISOString());
+
+  if (error) throw new Error(`daily cap check failed: ${error.message}`);
+  return (count ?? 0) >= DAILY_MOMENT_CAP;
 }
 
 async function momentAlreadyExists(
@@ -80,12 +108,42 @@ async function explainAndInsert(
   txRef: string | null,
   explain: ExplainFn,
 ): Promise<void> {
+  // Checked fresh per candidate moment rather than once per pipeline run:
+  // simpler than threading a shared budget through five concurrently-run
+  // rule evaluators, at the cost of a small, bounded overshoot risk (at most
+  // a few moments over cap in one window, if multiple rules fire in the same
+  // run) rather than a hard guarantee. Fine for an alarm-fatigue cap, not
+  // something that needs DB-level locking.
+  if (await dailyCapReached(supabase, wallet.id)) {
+    console.warn(`[oracle] daily moment cap reached for wallet ${wallet.id}, suppressing ${result.ruleId}`);
+    return;
+  }
+
   const { oracleText } = await explain({
     ruleId: result.ruleId,
     details: result.details,
     walletContext: { label: wallet.label, chainId: wallet.chainId },
   });
   await insertMoment(supabase, wallet.id, result, oracleText, txRef);
+
+  // Notify tier (and Confirm, which spec section 6 defines as Notify plus a
+  // prepared action) both mean "email immediately." shouldCreateMoment
+  // already excludes tier 'off' before we get here. Best-effort: a failed
+  // send must not undo or retry-loop the moment that's already durable.
+  if (wallet.notificationEmail) {
+    const sent = await sendMomentNotification({
+      to: wallet.notificationEmail,
+      ruleLabel: RULE_LABELS[result.ruleId],
+      score: result.score,
+      oracleText,
+      walletLabel: wallet.label,
+      walletAddress: wallet.address,
+    }).catch((err) => {
+      console.error(`[oracle] notification send threw for wallet ${wallet.id}`, err);
+      return false;
+    });
+    if (!sent) console.warn(`[oracle] notification not sent for wallet ${wallet.id} rule ${result.ruleId}`);
+  }
 }
 
 /**

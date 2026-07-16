@@ -46,9 +46,14 @@ export default function Home() {
         )}
 
         {session && (
-          <Link href="/timeline" className="w-fit text-sm text-amber underline">
-            View Timeline
-          </Link>
+          <div className="flex gap-4">
+            <Link href="/timeline" className="text-sm text-amber underline">
+              View Timeline
+            </Link>
+            <Link href="/guardrails" className="text-sm text-amber underline">
+              Guardrails
+            </Link>
+          </div>
         )}
       </section>
     </main>

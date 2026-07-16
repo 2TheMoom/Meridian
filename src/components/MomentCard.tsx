@@ -2,8 +2,16 @@
 
 import { RULE_LABELS } from "@/lib/oracle/labels";
 import type { Moment } from "@/lib/oracle/types";
+import { RevokeButton } from "./RevokeButton";
 
 const CRIMSON_THRESHOLD = 85; // spec section 7: crimson reserved for score >= 85 only
+
+const STATUS_LABELS: Record<string, string> = {
+  acked: "acknowledged",
+  dismissed: "dismissed",
+  acted: "approval revoked",
+  snoozed: "snoozed",
+};
 
 function formatTimestamp(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -20,13 +28,17 @@ function truncateAddress(address: string): string {
 
 export function MomentCard({
   moment,
+  chainId,
   onAcknowledge,
   onDismiss,
+  onRevoked,
   isUpdating,
 }: {
   moment: Moment;
+  chainId: number;
   onAcknowledge: (id: string) => void;
   onDismiss: (id: string) => void;
+  onRevoked: (id: string) => void;
   isUpdating: boolean;
 }) {
   const isSevere = moment.score >= CRIMSON_THRESHOLD;
@@ -68,7 +80,7 @@ export function MomentCard({
       )}
 
       {isOpen ? (
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap items-start gap-2">
           <button
             onClick={() => onAcknowledge(moment.id)}
             disabled={isUpdating}
@@ -83,18 +95,20 @@ export function MomentCard({
           >
             Dismiss
           </button>
-          {moment.rule_id === "R1" && (
-            <button
-              disabled
-              title="Keel's one-tap revoke ships in v1.1 — not wired to a transaction yet"
-              className="rounded border border-slate-700 px-3 py-1 text-sm text-slate-500"
-            >
-              Revoke (coming soon)
-            </button>
+          {moment.rule_id === "R1" && token && spender && (
+            <RevokeButton
+              momentId={moment.id}
+              token={token}
+              spender={spender}
+              chainId={chainId}
+              onRevoked={() => onRevoked(moment.id)}
+            />
           )}
         </div>
       ) : (
-        <p className="mt-4 text-xs uppercase tracking-wide text-slate-500">{moment.status}</p>
+        <p className="mt-4 text-xs uppercase tracking-wide text-slate-500">
+          {STATUS_LABELS[moment.status] ?? moment.status}
+        </p>
       )}
     </div>
   );
