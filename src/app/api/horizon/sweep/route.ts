@@ -1,25 +1,14 @@
-import { timingSafeEqual } from "crypto";
 import { createPublicClient, http, type PublicClient } from "viem";
 import { NextRequest, NextResponse } from "next/server";
 import { monad, monadTestnet } from "@/lib/chain";
 import { getLastProcessedBlock } from "@/lib/horizon/syncState";
 import { getRegisteredWallets } from "@/lib/horizon/wallets";
 import { processWindow } from "@/lib/horizon/window";
+import { isAuthorizedBySecret } from "@/lib/internalAuth";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 
 const CONFIRMATION_DEPTH = 3n;
 const MAX_BLOCKS_PER_INVOCATION = BigInt(process.env.HORIZON_SWEEP_MAX_BLOCKS ?? 5000);
-
-function isAuthorized(req: NextRequest): boolean {
-  const provided = req.headers.get("x-horizon-secret");
-  const expected = process.env.HORIZON_SWEEP_SECRET;
-  if (!provided || !expected) return false;
-
-  const providedBuf = Buffer.from(provided);
-  const expectedBuf = Buffer.from(expected);
-  if (providedBuf.length !== expectedBuf.length) return false;
-  return timingSafeEqual(providedBuf, expectedBuf);
-}
 
 function clientFor(chainId: number): PublicClient {
   const chain = chainId === 143 ? monad : monadTestnet;
@@ -49,7 +38,7 @@ async function sweepChain(supabase: ReturnType<typeof createServiceRoleSupabaseC
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isAuthorizedBySecret(req, "x-horizon-secret", process.env.HORIZON_SWEEP_SECRET)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

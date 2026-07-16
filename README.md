@@ -66,6 +66,15 @@ npm test
 
 `src/lib/oracle/rules/` implements R1–R5 (spec section 5) as pure, side-effect-free functions — each takes a plain input object and a partial config override (for the `policies.threshold` overrides) and returns `{ ruleId, score, triggered, details }`. No DB or network access, no LLM in the loop — the explanation layer (Claude) only narrates a score these functions already produced, never computes or adjusts it. Uses Node's built-in test runner (`node:test`), no extra test-framework dependency.
 
+### Oracle's explanation layer
+
+`POST /api/oracle/explain` (internal only, `x-oracle-secret` header auth, never client-callable) calls Claude Sonnet 5 to narrate a Moment a rules-engine call already scored. `src/lib/oracle/explain.ts` is the core:
+
+- **The score never reaches the model.** `ExplanationInput` has no field for it — the caller passes `ruleId` + `details` (the rule's raw inputs) only, not the `RuleResult.score`. This is enforced by the type, not just an instruction.
+- **Structured output** (`output_config.format: json_schema`) forces the exact `{ why, saferAlternative }` two-part shape the spec requires, rather than parsing prose.
+- **Restraint-only guardrail:** a regex backstop (`violatesRestraintPrinciple`) checks the response for leverage/yield-farming/hedging/repositioning language or em dashes before it's trusted — on a match (or an API failure, a refusal, or a malformed response) it falls back to a deterministic, on-brand template per rule ID, so a Moment always gets `oracle_text` populated. Tested in `explain.test.ts` without hitting the network.
+- Uses `thinking: {type: "disabled"}` and `effort: "low"` — this is a short, bounded, templated narration task, not one that benefits from extended reasoning.
+
 ## Security posture
 
 - **Dependencies:** `npm audit` is clean (0 vulnerabilities) as of this scaffold. `package.json` `overrides` force-patch transitive copies of `viem`/`ws`/`postcss`/`uuid` bundled inside WalletConnect/Reown's dependency chain — re-run `npm audit` after any dependency bump, since those overrides pin versions that need revisiting as upstream catches up.
@@ -76,9 +85,10 @@ npm test
 - **HTTP headers:** CSP, HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and a restrictive `Permissions-Policy` are set in `next.config.mjs`. The CSP's `connect-src`/`frame-src` allowlist for WalletConnect/Reown/Coinbase endpoints is based on their documented relay domains but **has not been exercised against a live wallet-connect flow in a browser** — verify it doesn't block a real connect/sign-in before shipping, and tighten `script-src`/`style-src` further if RainbowKit doesn't need `'unsafe-inline'` in practice.
 - **Horizon worker isolation:** the worker only ever holds the Supabase service-role key server-side (Railway env, never shipped to the browser). `POST /api/horizon/sweep` compares its secret header with `crypto.timingSafeEqual` rather than `===`, and only accepts chain IDs 143/10143.
 - **Allowlist is chain-scoped:** `allowlist`'s primary key is `(address, chain_id)`, not `address` alone (migration `0002`) — 60 addresses in the real monad-crypto/protocols data exist on *both* mainnet and testnet as unrelated contracts; a single-column key would have let seeding one network silently overwrite the other's `chain_id`. `src/lib/horizon/window.ts`'s allowlist lookup filters by the wallet's own `chain_id` for the same reason — a mainnet-allowlisted address must not suppress the "not allowlisted" signal for a same-address testnet contract.
+- **`POST /api/oracle/explain` is internal only** (secret header, `crypto.timingSafeEqual`, same pattern as the sweep route — factored into `src/lib/internalAuth.ts`). It never receives a Moment's numeric score, so even a fully compromised Anthropic API key or a prompt-injected response can't leak or spoof scoring — the rules engine's output is the sole source of truth for that.
 
 ## Status
 
 Week 1 complete: app scaffold, Supabase schema + RLS, wallet connect + SIWE sign-in, wallet registration (with ownership verification), security headers, and the Horizon worker (WebSocket listener + cron fallback route).
 
-Week 2 in progress: Oracle's R1–R5 rules engine (pure functions, unit tested), allowlist seeding script. Not yet built: Claude explanation layer, Moment creation pipeline (wiring Horizon's `snapshots` into these rule functions), Timeline UI. See `meridian-mvp-spec.md` section 10 for the build plan.
+Week 2 in progress: Oracle's R1–R5 rules engine (pure functions, unit tested), allowlist seeding script, Claude explanation layer. Not yet built: Moment creation pipeline (wiring Horizon's `snapshots` through the rules engine and explanation layer into `moments` rows), Timeline UI. See `meridian-mvp-spec.md` section 10 for the build plan.
