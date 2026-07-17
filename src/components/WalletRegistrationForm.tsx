@@ -49,20 +49,20 @@ export function WalletRegistrationForm({ onRegistered }: { onRegistered: () => v
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 max-w-sm">
-      <label className="text-sm text-slate-300">
+      <label className="font-body text-sm text-dim">
         Label (optional)
         <input
-          className="mt-1 w-full rounded bg-horizon px-3 py-2 font-mono text-sm text-slate-100 outline-none"
+          className="mt-1 w-full border border-paper/15 bg-ink px-3 py-2 font-technical text-sm text-paper outline-none"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="main wallet"
         />
       </label>
-      {error && <p className="text-sm text-crimson">{error}</p>}
+      {error && <p className="font-body text-sm text-danger">{error}</p>}
       <button
         type="submit"
         disabled={!address || submitting}
-        className="rounded bg-amber px-4 py-2 font-heading text-navy disabled:opacity-50"
+        className="border border-brass px-4 py-2 font-display text-sm text-brass disabled:opacity-40"
       >
         {submitting ? "Registering..." : "Register this wallet"}
       </button>
