@@ -97,11 +97,11 @@ export function RevokeButton({
       <button
         onClick={handleClick}
         disabled={Boolean(busy) || walletMismatch}
-        className="rounded bg-crimson px-3 py-1 text-sm text-slate-100 disabled:opacity-50"
+        className="bg-danger px-3 py-1 font-display text-sm text-paper disabled:opacity-50"
       >
         {isSigning ? "Confirm in wallet..." : txHash && !isConfirmed ? "Waiting for confirmation..." : verifying ? "Verifying..." : "Revoke approval"}
       </button>
-      {error && <p className="text-xs text-crimson">{error}</p>}
+      {error && <p className="font-body text-xs text-danger">{error}</p>}
     </div>
   );
 }

@@ -1,23 +1,10 @@
 import type { Metadata } from "next";
-import { Barlow_Condensed, Fraunces, IBM_Plex_Mono, Inter, JetBrains_Mono } from "next/font/google";
+import { Fraunces, IBM_Plex_Mono, Inter } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 
-// Legacy dark theme (/timeline, /guardrails) — unchanged.
-const barlowCondensed = Barlow_Condensed({
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-  variable: "--font-barlow-condensed",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-jetbrains-mono",
-});
-
-// "/" — a distinct type system: a warm editorial serif for display type, a
-// plain grotesk for body copy, a technical mono for instrument-style data.
+// A distinct type system: a warm editorial serif for display type, a plain
+// grotesk for body copy, a technical mono for instrument-style data.
 const fraunces = Fraunces({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
@@ -49,10 +36,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="en"
-      className={`${barlowCondensed.variable} ${jetbrainsMono.variable} ${fraunces.variable} ${inter.variable} ${plexMono.variable}`}
-    >
+    <html lang="en" className={`${fraunces.variable} ${inter.variable} ${plexMono.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>

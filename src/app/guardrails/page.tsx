@@ -132,20 +132,20 @@ export default function GuardrailsPage() {
 
   if (authLoading) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-6 py-16">
-        <h1 className="font-heading text-3xl tracking-wide">Guardrails</h1>
-        <p className="text-slate-500">Loading...</p>
+      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-4 py-16 sm:px-6">
+        <h1 className="font-display text-3xl text-paper">Guardrails</h1>
+        <p className="font-body text-dim">Loading...</p>
       </main>
     );
   }
 
   if (!session) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-6 py-16">
-        <h1 className="font-heading text-3xl tracking-wide">Guardrails</h1>
-        <p className="text-slate-400">
+      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-4 py-16 sm:px-6">
+        <h1 className="font-display text-3xl text-paper">Guardrails</h1>
+        <p className="font-body text-dim">
           Sign in and register a wallet first.{" "}
-          <Link href="/" className="text-amber underline">
+          <Link href="/" className="text-brass underline underline-offset-4">
             Go back
           </Link>
           .
@@ -155,10 +155,10 @@ export default function GuardrailsPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-16">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-4 py-16 sm:px-6">
       <header className="flex items-center justify-between">
-        <h1 className="font-heading text-3xl tracking-wide">Guardrails</h1>
-        <Link href="/timeline" className="text-sm text-slate-400 underline">
+        <h1 className="font-display text-3xl text-paper">Guardrails</h1>
+        <Link href="/timeline" className="font-technical text-xs uppercase tracking-widest text-dim underline underline-offset-4 hover:text-paper">
           Timeline
         </Link>
       </header>
@@ -167,7 +167,7 @@ export default function GuardrailsPage() {
         <select
           value={selectedWalletId ?? ""}
           onChange={(e) => setSelectedWalletId(e.target.value)}
-          className="w-fit rounded bg-horizon px-3 py-2 font-mono text-sm text-slate-100"
+          className="w-fit border border-paper/15 bg-ink-raised px-3 py-2 font-technical text-sm text-paper"
         >
           {wallets.map((w) => (
             <option key={w.id} value={w.id}>
@@ -177,20 +177,20 @@ export default function GuardrailsPage() {
         </select>
       )}
 
-      {error && <p className="text-sm text-crimson">{error}</p>}
+      {error && <p className="font-body text-sm text-danger">{error}</p>}
 
       {policies === null ? (
-        <p className="text-slate-500">Loading...</p>
+        <p className="font-body text-dim">Loading...</p>
       ) : (
         <div className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1 rounded border border-slate-700 bg-horizon p-4 text-sm text-slate-400">
+          <label className="flex flex-col gap-1 border border-paper/10 bg-ink-raised p-4 font-body text-sm text-dim">
             Notification email — Notify/Confirm-tier Moments email here. Leave blank to get in-app only.
             <input
               type="email"
               value={notificationEmail}
               onChange={(e) => setNotificationEmail(e.target.value)}
               placeholder="you@example.com"
-              className="mt-1 w-full max-w-sm rounded bg-navy px-2 py-1 font-mono text-sm text-slate-100"
+              className="mt-1 w-full max-w-sm border border-paper/15 bg-ink px-2 py-1 font-technical text-sm text-paper"
             />
           </label>
 
@@ -198,16 +198,16 @@ export default function GuardrailsPage() {
             const policy = policies.find((p) => p.rule_id === ruleId);
             if (!policy) return null;
             return (
-              <div key={ruleId} className="flex flex-col gap-2 rounded border border-slate-700 bg-horizon p-4">
+              <div key={ruleId} className="flex flex-col gap-2 border border-paper/10 bg-ink-raised p-4">
                 <div className="flex items-center justify-between">
-                  <span className="font-heading tracking-wide">{RULE_LABELS[ruleId]}</span>
+                  <span className="font-display text-lg text-paper">{RULE_LABELS[ruleId]}</span>
                   <div className="flex gap-1">
                     {TIERS.map((tier) => (
                       <button
                         key={tier}
                         onClick={() => setTier(ruleId, tier)}
-                        className={`rounded px-2 py-1 text-xs uppercase tracking-wide ${
-                          policy.tier === tier ? "bg-amber text-navy" : "border border-slate-600 text-slate-400"
+                        className={`px-2 py-1 font-technical text-xs uppercase tracking-wide ${
+                          policy.tier === tier ? "bg-brass text-ink" : "border border-paper/20 text-dim"
                         }`}
                       >
                         {tier}
@@ -217,13 +217,13 @@ export default function GuardrailsPage() {
                 </div>
 
                 {ruleId === "R5" && (
-                  <label className="text-sm text-slate-400">
+                  <label className="font-body text-sm text-dim">
                     Floor (MON) — flag when native balance drops below this
                     <input
                       value={floorMon}
                       onChange={(e) => setFloorMon(e.target.value)}
                       placeholder="e.g. 0.5"
-                      className="mt-1 block w-40 rounded bg-navy px-2 py-1 font-mono text-sm text-slate-100"
+                      className="mt-1 block w-40 border border-paper/15 bg-ink px-2 py-1 font-technical text-sm text-paper"
                     />
                   </label>
                 )}
@@ -231,7 +231,7 @@ export default function GuardrailsPage() {
             );
           })}
 
-          <p className="text-xs text-slate-500">
+          <p className="font-body text-xs text-dim">
             Marking a recurring payment (R3) as intentional isn&apos;t configurable here yet — detection is live, but
             there&apos;s no UI action to acknowledge a specific pattern, so it keeps surfacing until it stops
             recurring. Per-rule tier and the R5 floor above are live.
@@ -240,7 +240,7 @@ export default function GuardrailsPage() {
           <button
             onClick={save}
             disabled={status === "saving"}
-            className="w-fit rounded bg-amber px-4 py-2 font-heading text-navy disabled:opacity-50"
+            className="w-fit border border-brass px-4 py-2 font-display text-sm text-brass hover:bg-brass hover:text-ink disabled:opacity-50"
           >
             {status === "saving" ? "Saving..." : status === "saved" ? "Saved" : "Save guardrails"}
           </button>

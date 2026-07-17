@@ -5,16 +5,9 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Legacy dark theme — still used by /timeline, /guardrails, and
-        // their components until those get the same brand pass as "/".
-        navy: "#0a1128",
-        horizon: "#1c2b4a",
-        amber: "#e8a33d",
-        crimson: "#c23b3b",
-
-        // "/" — a night-watch palette: dark ink, warm chart-paper ivory,
-        // brass instrument accent, and port/starboard navigation-light
-        // colors (red/green) doing double duty as danger/positive signals.
+        // A night-watch palette: dark ink, warm chart-paper ivory, brass
+        // instrument accent, and port/starboard navigation-light colors
+        // (red/green) doing double duty as danger/positive signals.
         ink: "#0C0F14",
         "ink-raised": "#151A22",
         paper: "#EDE7DA",
@@ -24,8 +17,6 @@ export default {
         danger: "#B5453B",
       },
       fontFamily: {
-        heading: ["var(--font-barlow-condensed)", "sans-serif"],
-        mono: ["var(--font-jetbrains-mono)", "monospace"],
         display: ["var(--font-fraunces)", "serif"],
         body: ["var(--font-inter)", "sans-serif"],
         technical: ["var(--font-plex-mono)", "monospace"],

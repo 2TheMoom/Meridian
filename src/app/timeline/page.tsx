@@ -99,20 +99,20 @@ export default function TimelinePage() {
 
   if (authLoading) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-6 py-16">
-        <h1 className="font-heading text-3xl tracking-wide">Timeline</h1>
-        <p className="text-slate-500">Loading...</p>
+      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-4 py-16 sm:px-6">
+        <h1 className="font-display text-3xl text-paper">Timeline</h1>
+        <p className="font-body text-dim">Loading...</p>
       </main>
     );
   }
 
   if (!session) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-6 py-16">
-        <h1 className="font-heading text-3xl tracking-wide">Timeline</h1>
-        <p className="text-slate-400">
+      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-4 py-16 sm:px-6">
+        <h1 className="font-display text-3xl text-paper">Timeline</h1>
+        <p className="font-body text-dim">
           Sign in and register a wallet first.{" "}
-          <Link href="/" className="text-amber underline">
+          <Link href="/" className="text-brass underline underline-offset-4">
             Go back
           </Link>
           .
@@ -122,14 +122,14 @@ export default function TimelinePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-16">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-4 py-16 sm:px-6">
       <header className="flex items-center justify-between">
-        <h1 className="font-heading text-3xl tracking-wide">Timeline</h1>
-        <nav className="flex gap-4 text-sm text-slate-400">
-          <Link href="/guardrails" className="underline">
+        <h1 className="font-display text-3xl text-paper">Timeline</h1>
+        <nav className="flex gap-4 font-technical text-xs uppercase tracking-widest text-dim">
+          <Link href="/guardrails" className="underline underline-offset-4 hover:text-paper">
             Guardrails
           </Link>
-          <Link href="/" className="underline">
+          <Link href="/" className="underline underline-offset-4 hover:text-paper">
             Manage wallets
           </Link>
         </nav>
@@ -139,7 +139,7 @@ export default function TimelinePage() {
         <select
           value={selectedWalletId ?? ""}
           onChange={(e) => setSelectedWalletId(e.target.value)}
-          className="w-fit rounded bg-horizon px-3 py-2 font-mono text-sm text-slate-100"
+          className="w-fit border border-paper/15 bg-ink-raised px-3 py-2 font-technical text-sm text-paper"
         >
           {wallets.map((w) => (
             <option key={w.id} value={w.id}>
@@ -149,22 +149,22 @@ export default function TimelinePage() {
         </select>
       )}
 
-      {error && <p className="text-sm text-crimson">{error}</p>}
+      {error && <p className="font-body text-sm text-danger">{error}</p>}
 
       {wallets.length === 0 && moments === null ? (
-        <p className="text-slate-400">
+        <p className="font-body text-dim">
           No wallet registered yet.{" "}
-          <Link href="/" className="text-amber underline">
+          <Link href="/" className="text-brass underline underline-offset-4">
             Register one
           </Link>
           .
         </p>
       ) : moments === null ? (
-        <p className="text-slate-500">Loading...</p>
+        <p className="font-body text-dim">Loading...</p>
       ) : openCount === 0 ? (
-        <div className="rounded border border-slate-700 bg-horizon p-6 text-center">
-          <p className="font-heading text-xl tracking-wide text-amber">All clear</p>
-          <p className="mt-1 text-sm text-slate-400">Meridian is watching. Nothing needs your attention right now.</p>
+        <div className="border border-paper/10 bg-ink-raised p-6 text-center">
+          <p className="font-display text-xl text-brass">All clear</p>
+          <p className="mt-1 font-body text-sm text-dim">Meridian is watching. Nothing needs your attention right now.</p>
         </div>
       ) : null}
 
@@ -172,7 +172,7 @@ export default function TimelinePage() {
         <div className="flex flex-col gap-6">
           {grouped.map(([day, dayMoments]) => (
             <section key={day} className="flex flex-col gap-3">
-              <h2 className="font-heading text-sm uppercase tracking-widest text-slate-500">{day}</h2>
+              <h2 className="font-technical text-[11px] uppercase tracking-widest text-dim">{day}</h2>
               <div className="flex flex-col gap-3">
                 {dayMoments.map((moment) => (
                   <MomentCard

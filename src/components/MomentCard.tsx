@@ -4,7 +4,7 @@ import { RULE_LABELS } from "@/lib/oracle/labels";
 import type { Moment } from "@/lib/oracle/types";
 import { RevokeButton } from "./RevokeButton";
 
-const CRIMSON_THRESHOLD = 85; // spec section 7: crimson reserved for score >= 85 only
+const DANGER_THRESHOLD = 85; // spec section 7: reserved for score >= 85 only
 
 const STATUS_LABELS: Record<string, string> = {
   acked: "acknowledged",
@@ -41,39 +41,35 @@ export function MomentCard({
   onRevoked: (id: string) => void;
   isUpdating: boolean;
 }) {
-  const isSevere = moment.score >= CRIMSON_THRESHOLD;
+  const isSevere = moment.score >= DANGER_THRESHOLD;
   const [why, saferAlternative] = (moment.oracle_text ?? "").split("\n\n");
   const spender = moment.context.spender as string | undefined;
   const token = moment.context.token as string | undefined;
   const isOpen = moment.status === "open";
 
   return (
-    <div
-      className={`rounded border-l-4 bg-horizon p-4 ${isSevere ? "border-crimson" : "border-amber"}`}
-    >
+    <div className={`border-l-2 bg-ink-raised p-4 ${isSevere ? "border-danger" : "border-brass"}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span
-            className={`rounded px-2 py-0.5 font-heading text-sm tracking-wide text-navy ${
-              isSevere ? "bg-crimson" : "bg-amber"
-            }`}
+            className={`px-2 py-0.5 font-display text-sm text-ink ${isSevere ? "bg-danger" : "bg-brass"}`}
           >
             {RULE_LABELS[moment.rule_id]}
           </span>
-          <span className="font-mono text-sm text-slate-400">score {moment.score}</span>
+          <span className="font-technical text-xs text-dim">score {moment.score}</span>
         </div>
-        <span className="text-xs text-slate-500">{formatTimestamp(moment.created_at)}</span>
+        <span className="font-technical text-[11px] text-dim">{formatTimestamp(moment.created_at)}</span>
       </div>
 
       {why && (
-        <div className="mt-3 space-y-2 text-sm text-slate-200">
+        <div className="mt-3 space-y-2 font-body text-sm leading-relaxed text-paper/90">
           <p>{why}</p>
-          {saferAlternative && <p className="text-slate-300">{saferAlternative}</p>}
+          {saferAlternative && <p className="text-paper/70">{saferAlternative}</p>}
         </div>
       )}
 
       {(spender || token) && (
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-slate-500">
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 font-technical text-xs text-dim">
           {spender && <span>spender {truncateAddress(spender)}</span>}
           {token && <span>token {truncateAddress(token)}</span>}
         </div>
@@ -84,14 +80,14 @@ export function MomentCard({
           <button
             onClick={() => onAcknowledge(moment.id)}
             disabled={isUpdating}
-            className="rounded bg-slate-700 px-3 py-1 text-sm text-slate-100 disabled:opacity-50"
+            className="border border-paper/20 px-3 py-1 font-body text-sm text-paper disabled:opacity-50"
           >
             Acknowledge
           </button>
           <button
             onClick={() => onDismiss(moment.id)}
             disabled={isUpdating}
-            className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-300 disabled:opacity-50"
+            className="border border-paper/10 px-3 py-1 font-body text-sm text-dim disabled:opacity-50"
           >
             Dismiss
           </button>
@@ -107,7 +103,7 @@ export function MomentCard({
           )}
         </div>
       ) : (
-        <p className="mt-4 text-xs uppercase tracking-wide text-slate-500">
+        <p className="mt-4 font-technical text-[11px] uppercase tracking-wide text-dim">
           {STATUS_LABELS[moment.status] ?? moment.status}
         </p>
       )}

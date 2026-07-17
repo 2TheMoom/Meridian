@@ -6,5 +6,5 @@
    on the <html> element in layout.tsx — see tailwind.config.ts fontFamily. */
 
 body {
-  @apply bg-navy text-slate-100;
+  @apply bg-ink text-paper;
 }
