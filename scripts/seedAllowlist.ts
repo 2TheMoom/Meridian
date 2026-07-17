@@ -25,7 +25,7 @@ const NETWORKS: { network: Network; chainId: number }[] = [
   { network: "testnet", chainId: 10143 },
 ];
 
-const BATCH_SIZE = 500;
+const BATCH_SIZE = 100;
 
 async function fetchProtocols(network: Network): Promise<ProtocolsFile> {
   const res = await fetch(`${SOURCE_BASE}/protocols-${network}.json`);
