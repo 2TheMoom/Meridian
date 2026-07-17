@@ -112,8 +112,8 @@ export default function TimelinePage() {
         <h1 className="font-display text-3xl text-paper">Timeline</h1>
         <p className="font-body text-dim">
           Sign in and register a wallet first.{" "}
-          <Link href="/" className="text-brass underline underline-offset-4">
-            Go back
+          <Link href="/dashboard" className="text-brass underline underline-offset-4">
+            Go to dashboard
           </Link>
           .
         </p>
@@ -129,7 +129,7 @@ export default function TimelinePage() {
           <Link href="/guardrails" className="underline underline-offset-4 hover:text-paper">
             Guardrails
           </Link>
-          <Link href="/" className="underline underline-offset-4 hover:text-paper">
+          <Link href="/dashboard" className="underline underline-offset-4 hover:text-paper">
             Manage wallets
           </Link>
         </nav>
@@ -154,7 +154,7 @@ export default function TimelinePage() {
       {wallets.length === 0 && moments === null ? (
         <p className="font-body text-dim">
           No wallet registered yet.{" "}
-          <Link href="/" className="text-brass underline underline-offset-4">
+          <Link href="/dashboard" className="text-brass underline underline-offset-4">
             Register one
           </Link>
           .

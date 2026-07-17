@@ -145,8 +145,8 @@ export default function GuardrailsPage() {
         <h1 className="font-display text-3xl text-paper">Guardrails</h1>
         <p className="font-body text-dim">
           Sign in and register a wallet first.{" "}
-          <Link href="/" className="text-brass underline underline-offset-4">
-            Go back
+          <Link href="/dashboard" className="text-brass underline underline-offset-4">
+            Go to dashboard
           </Link>
           .
         </p>

@@ -1,9 +1,10 @@
-import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { GetStarted } from "@/components/GetStarted";
+import Link from "next/link";
 import { HeroPanel } from "@/components/HeroPanel";
 import { HowItWorks } from "@/components/HowItWorks";
 import { RulesShowcase } from "@/components/RulesShowcase";
 
+// Static preview only — no wallet connection or auth on this page at all.
+// The dashboard ("/dashboard") is the one place that connects a wallet.
 export default function Home() {
   return (
     <main className="min-h-screen bg-ink">
@@ -19,7 +20,12 @@ export default function Home() {
                 Rules
               </a>
             </nav>
-            <ConnectButton showBalance={false} />
+            <Link
+              href="/dashboard"
+              className="border border-brass px-4 py-2 font-display text-sm text-brass hover:bg-brass hover:text-ink"
+            >
+              Dashboard
+            </Link>
           </div>
         </div>
       </header>
@@ -40,12 +46,12 @@ export default function Home() {
               rules — no LLM in the scoring path — so you have a real chance to act before a mistake settles.
             </p>
             <div className="flex flex-wrap items-center gap-6 pt-2">
-              <a
-                href="#get-started"
+              <Link
+                href="/dashboard"
                 className="border border-brass px-5 py-2.5 font-display text-sm text-brass hover:bg-brass hover:text-ink"
               >
                 Get started
-              </a>
+              </Link>
               <a href="#how-it-works" className="font-technical text-xs text-dim underline underline-offset-4">
                 see how it works
               </a>
@@ -83,14 +89,17 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Get started */}
-      <section id="get-started" className="border-t border-paper/10 bg-ink-raised">
-        <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
+      {/* Dashboard CTA */}
+      <section className="border-t border-paper/10 bg-ink-raised">
+        <div className="mx-auto flex max-w-5xl flex-col items-start gap-4 px-4 py-12 sm:px-6 sm:py-16">
           <p className="font-technical text-[11px] uppercase tracking-[0.2em] text-dim">Get started</p>
-          <h2 className="mt-2 font-display text-2xl text-paper">Three steps in.</h2>
-          <div className="mt-8 max-w-md sm:mt-10">
-            <GetStarted />
-          </div>
+          <h2 className="font-display text-2xl text-paper">Connect your wallet on the dashboard.</h2>
+          <Link
+            href="/dashboard"
+            className="border border-brass px-5 py-2.5 font-display text-sm text-brass hover:bg-brass hover:text-ink"
+          >
+            Open dashboard
+          </Link>
         </div>
       </section>
 
