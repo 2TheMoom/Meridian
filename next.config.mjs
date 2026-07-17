@@ -15,6 +15,7 @@ const walletConnectOrigins = [
   "https://*.reown.com",
   "wss://*.reown.com",
   "https://explorer-api.walletconnect.com",
+  "https://api.web3modal.org",
 ];
 
 const connectSrc = [
@@ -28,7 +29,17 @@ const connectSrc = [
 
 const csp = [
   `default-src 'self'`,
-  `script-src 'self'${isDev ? " 'unsafe-eval'" : ""}`,
+  // 'unsafe-eval'/'wasm-unsafe-eval' were previously dev-only. Production
+  // shipped with strict `script-src 'self'` and the wallet-connect UI
+  // silently failed to render — a known, widely-reported wagmi/RainbowKit
+  // + strict-CSP interaction (their connector dependency chain hits
+  // eval/WASM-compile paths this policy was blocking). Not narrowable
+  // without vendoring/patching their dependencies.
+  // 'unsafe-inline' is required too: Next's App Router streams RSC/hydration
+  // payloads via inline <script> tags with no nonce plumbing in place, and
+  // without this the browser blocks them outright — client JS never
+  // hydrates, so the whole page (not just wallet connect) is inert.
+  `script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' 'unsafe-inline'`,
   `style-src 'self' 'unsafe-inline'`,
   `img-src 'self' data: https:`,
   `font-src 'self' data:`,

@@ -1,68 +1,37 @@
 "use client";
 
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import Link from "next/link";
 import { useState } from "react";
-import { useAccount } from "wagmi";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { WalletRegistrationForm } from "./WalletRegistrationForm";
 
-function StepRow({
-  n,
-  label,
-  done,
-  children,
-}: {
-  n: number;
-  label: string;
-  done: boolean;
-  children?: React.ReactNode;
-}) {
-  return (
-    <li className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
-        <span
-          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-technical text-xs ${
-            done ? "bg-signal text-ink" : "border border-paper/25 text-dim"
-          }`}
-        >
-          {done ? "✓" : n}
-        </span>
-        <span className={`font-display text-lg ${done ? "text-dim line-through" : "text-paper"}`}>{label}</span>
-      </div>
-      {!done && children && <div className="pl-9">{children}</div>}
-    </li>
-  );
-}
-
+// Connecting a wallet and signing in happen once, from the ConnectButton in
+// the top nav — this panel only ever covers the one thing that's a distinct,
+// repeatable action: registering a wallet for Meridian to watch.
 export function GetStarted() {
-  const { isConnected } = useAccount();
-  const { session, loading, signInWithEthereum } = useSupabaseAuth();
+  const { session, loading } = useSupabaseAuth();
   const [registered, setRegistered] = useState(false);
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="border border-paper/10 bg-ink-raised p-6">
-        <ol className="flex flex-col gap-5">
-          <StepRow n={1} label="Connect your wallet" done={isConnected}>
-            <ConnectButton />
-          </StepRow>
-
-          <StepRow n={2} label="Sign in with Ethereum" done={Boolean(session)}>
-            {isConnected && !loading && (
-              <button
-                onClick={() => signInWithEthereum()}
-                className="w-fit border border-brass px-4 py-2 font-display text-sm text-brass"
-              >
-                Sign in with Ethereum
-              </button>
-            )}
-          </StepRow>
-
-          <StepRow n={3} label="Register a wallet to watch" done={registered}>
-            {session && <WalletRegistrationForm onRegistered={() => setRegistered(true)} />}
-          </StepRow>
-        </ol>
+      <div className="border border-paper/10 bg-ink-raised p-8">
+        <h1 className="font-display text-2xl text-paper">Watch a wallet</h1>
+        <p className="mt-2 font-body text-sm text-dim">
+          Meridian scores every transaction your registered wallet is about to make, in real time.
+        </p>
+        <div className="mt-6">
+          {loading ? (
+            <p className="font-body text-sm text-dim">Loading...</p>
+          ) : !session ? (
+            <p className="font-body text-sm text-dim">
+              Connect your wallet and sign in using the button at the top right to get started.
+            </p>
+          ) : registered ? (
+            <p className="font-body text-sm text-signal">Wallet registered.</p>
+          ) : (
+            <WalletRegistrationForm onRegistered={() => setRegistered(true)} />
+          )}
+        </div>
       </div>
 
       {registered && (

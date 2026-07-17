@@ -48,7 +48,7 @@ export function WalletRegistrationForm({ onRegistered }: { onRegistered: () => v
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3 max-w-sm">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 max-w-md">
       <label className="font-body text-sm text-dim">
         Label (optional)
         <input

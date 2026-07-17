@@ -96,12 +96,12 @@ Not yet. `MeridianKeel.sol` is unaudited and undeployed — this section fills i
 
 **Test suite:** 65/65 passing (`npm test`) across Horizon window processing, pattern detection, pricing, and Oracle's scoring/explanation layer. `MeridianKeel.sol`: 40/40 (`forge test`), 100% branch coverage.
 
-**Known limitations:** no IP/token-bucket rate limiting yet (only a per-user wallet cap); the CSP hasn't been exercised against a live wallet-connect flow in a browser; R4's contract-age lookup needs an archive-capable RPC to be reliable.
+**Known limitations:** no IP/token-bucket rate limiting yet (only a per-user wallet cap); R4's contract-age lookup needs an archive-capable RPC to be reliable.
 
 ## Stack
 
 - **App:** Next.js 16 (App Router), TypeScript, Tailwind CSS — deployed on Vercel
-- **Chain:** wagmi + viem, RainbowKit for wallet connection
+- **Chain:** wagmi + viem, custom wallet-connect UI (MetaMask, WalletConnect)
 - **Contracts:** Solidity, Foundry (`contracts/`)
 - **Data:** Supabase (Postgres, Auth, Row Level Security)
 - **Worker:** Node.js WebSocket listener (Horizon) — deployed on Railway
