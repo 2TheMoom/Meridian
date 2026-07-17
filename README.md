@@ -84,7 +84,7 @@ A daily per-wallet Moment cap (default 10, across all rules combined) exists spe
 - **Confirm** (shipped) — one-tap revocation from the Timeline for R1 (`approve(spender, 0)`) and R6 (`setApprovalForAll(operator, false)`) Moments. The revoke is independently verified by fetching and decoding the transaction on-chain before the Moment is marked resolved; a client's claim of "I revoked it" is never trusted on its own
 - **Hold** (`MeridianKeel.sol`, unaudited first draft) — an opt-in, user-funded daily spend-cap vault for native MON. Spends within cap execute instantly; spends over cap, and any increase to the cap itself, are timelocked 24 hours and cancelable. Emergency withdrawal is always available but delayed 12 hours, and the request itself triggers an email alert — the delay plus visibility is the drainer-resistance mechanic. The owner has no path to user funds; owner powers are limited to pausing new deposits and updating a published, informational-only allowlist pointer
 
-> **Status:** first draft, 44 deterministic tests plus a 256,000-call fuzzed invariant suite (fund conservation holds across every randomized sequence the fuzzer's tried so far), 100% branch coverage — not the same thing as an audit. Targets Monad testnet only for now; mainnet is on the Roadmap, gated on a public self-audit — spec thread → invariant tests thread → self-audit findings thread — happening for real, not compressed to hit a deadline. See [`contracts/README.md`](./contracts/README.md).
+> **Status:** first draft, 44 deterministic tests plus a 256,000-call fuzzed invariant suite (fund conservation holds across every randomized sequence the fuzzer's tried so far), 100% branch coverage — not the same thing as an audit. **Deployed to Monad testnet only** (see Deployed contracts below); mainnet is on the Roadmap, gated on a public self-audit — spec thread → invariant tests thread → self-audit findings thread — happening for real, not compressed to hit a deadline. See [`contracts/README.md`](./contracts/README.md).
 
 ### 📊 Timeline & Guardrails
 
@@ -96,7 +96,7 @@ A daily per-wallet Moment cap (default 10, across all rules combined) exists spe
 
 | Network | Address |
 |---|---|
-| Monad testnet (chain 10143) | Not yet — built, tested (40/40), and the deploy path is ready (see [`contracts/README.md`](./contracts/README.md)); this row fills in once it's actually broadcast. Check `contracts/broadcast/DeployMeridianKeel.s.sol/10143/run-latest.json` for the current state |
+| Monad testnet (chain 10143) | [`0xA72664323B63E837048120C9F9b801bDBCf5176a`](https://testnet.monadexplorer.com/address/0xA72664323B63E837048120C9F9b801bDBCf5176a) |
 | Monad mainnet (chain 143) | Not yet — on the Roadmap, gated on the self-audit actually happening, not on a deadline |
 
 Deploy flow is keystore-based, never a plaintext key — see [`contracts/README.md`](./contracts/README.md).
@@ -148,7 +148,7 @@ src/
     notifications/       Resend email
     supabase/            Client factories (browser, user-scoped, service role)
 worker/                 Horizon worker entrypoint (Railway)
-contracts/              MeridianKeel.sol (Foundry) — Hold tier, targets Monad testnet, unaudited
+contracts/              MeridianKeel.sol (Foundry) — Hold tier, deployed to Monad testnet, unaudited
 scripts/                One-off scripts (allowlist seeding)
 supabase/migrations/    SQL migrations
 ```
@@ -226,12 +226,11 @@ See `.env.example` for the full list with defaults. Grouped by area:
 - **✅ Guard.** Pre-sign check for any address, no wallet needed — the proactive half of the product, not just fast reactive response.
 - **✅ All six Oracle rules live.** R1–R6 all produce real Moments from real signals — none are wired-but-inert.
 - **✅ Confirm-tier revoke, verified on-chain, for R1 and R6.** Not client-trusted: the revoke transaction (`approve(spender, 0)` or `setApprovalForAll(operator, false)`) is fetched and decoded server-side before a Moment resolves.
-- **✅ `MeridianKeel.sol` built and tested.** Hold tier, first draft, 44 deterministic tests plus a 256,000-call fuzzed invariant suite, 100% branch coverage, keystore-based deploy script ready for Monad testnet.
+- **✅ `MeridianKeel.sol` deployed to Monad testnet.** Hold tier, first draft, 44 deterministic tests plus a 256,000-call fuzzed invariant suite, 100% branch coverage — see Deployed contracts above for the live address.
 - **✅ NFT approval monitoring (R6).** Watches `ApprovalForAll` (ERC-721/1155) for collection-wide operator grants — the actual drainer pattern, not a single-token approval.
 
 ### Up next
 
-- **`MeridianKeel.sol` deployed to Monad testnet** — the contract and the deploy tooling are ready; broadcasting it is next.
 - **MeridianKeel's public self-audit**, then mainnet deployment — gated on the audit actually happening, not on a deadline.
 - **Guard as a browser-extension auto-intercept** — today it's a check you run yourself; the next step is catching approval calls before the wallet's own signing popup even appears, the same pattern already shipped in Salvage's Chrome extension.
 - **Telegram notifications**, alongside email.
