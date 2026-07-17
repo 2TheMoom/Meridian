@@ -91,6 +91,36 @@ contract MeridianKeelTest is Test {
         keel.executeCapIncrease();
     }
 
+    /// @dev Found by invariant fuzzing (MeridianKeel.invariant.t.sol), not
+    ///      by hand — locking it in here as a permanent regression test. An
+    ///      instant cap decrease never touches spentInWindow, so spending
+    ///      more than the new cap in the current window (measured against
+    ///      the old, higher one) is entirely possible. That's safe — see
+    ///      setDailyCap's NatSpec — but it has a real, previously-silent
+    ///      consequence: every further spend() this window takes the
+    ///      timelocked over-cap path, even a tiny amount, until the window
+    ///      rolls over. This pins that behavior down explicitly.
+    function test_setDailyCap_decreaseBelowSpentInWindow_forcesQueuedPathForRestOfWindow() public {
+        vm.startPrank(alice);
+        keel.deposit{value: 10 ether}();
+        _setCapImmediate(8 ether);
+        keel.spend(bob, 8 ether); // instant, fully uses the current (high) cap
+
+        keel.setDailyCap(1 ether); // instant decrease; spentInWindow (8) now exceeds the new cap (1)
+        (, uint256 cap, uint256 spentInWindow,) = keel.vaults(alice);
+        assertEq(cap, 1 ether);
+        assertEq(spentInWindow, 8 ether, "decreasing the cap must not retroactively rewrite spentInWindow");
+
+        // Even a trivially small spend can no longer go instant this window.
+        keel.spend(bob, 0.01 ether);
+        (uint256 balance,,,) = keel.vaults(alice);
+        assertEq(balance, 10 ether - 8 ether - 0.01 ether, "amount must still be reserved even on the queued path");
+
+        vm.warp(block.timestamp + 24 hours);
+        keel.executeSpend(0); // the queued 0.01 ether spend resolves fine once its own timelock clears
+        vm.stopPrank();
+    }
+
     // ---------- Spending within cap ----------
 
     function test_spend_withinCap_executesInstantly() public {
@@ -501,7 +531,78 @@ contract MeridianKeelTest is Test {
         assertEq(address(keel).balance, aliceBalance + bobBalance);
     }
 
+    /// @dev The gap the previous test left: while a spend is queued
+    ///      (over-cap, timelocked), its amount is subtracted from
+    ///      vault.balance immediately but the ETH itself hasn't left the
+    ///      contract yet — it's tracked only in pendingSpends[id].amount.
+    ///      The real invariant during that window is contract balance ==
+    ///      sum(vault balances) + sum(unresolved pending spend amounts), not
+    ///      the simpler sum-of-vaults-only version. This checks that harder
+    ///      case explicitly, through both resolution paths.
+    function test_contractBalance_accountsForReservedPendingSpends() public {
+        vm.prank(alice);
+        keel.deposit{value: 7 ether}();
+        vm.prank(bob);
+        keel.deposit{value: 3 ether}();
+
+        _setCapAs(alice, 1 ether);
+        vm.prank(alice);
+        keel.spend(bob, 5 ether); // over cap -> queued; reserved, not yet paid out
+
+        _assertFundConservation();
+
+        // Resolve by executing: reserved amount leaves the contract for good.
+        vm.warp(block.timestamp + 24 hours);
+        vm.prank(alice);
+        keel.executeSpend(0);
+        _assertFundConservation();
+        assertEq(_sumUnresolvedPendingSpends(), 0, "resolved spend must stop counting as reserved");
+    }
+
+    function test_contractBalance_accountsForCancelledPendingSpend() public {
+        vm.prank(alice);
+        keel.deposit{value: 7 ether}();
+
+        _setCapAs(alice, 1 ether);
+        vm.prank(alice);
+        keel.spend(bob, 5 ether); // queued
+        _assertFundConservation();
+
+        vm.prank(alice);
+        keel.cancelSpend(0);
+        _assertFundConservation();
+        assertEq(_sumUnresolvedPendingSpends(), 0, "cancelled spend must stop counting as reserved");
+
+        (uint256 aliceBalance,,,) = keel.vaults(alice);
+        assertEq(aliceBalance, 7 ether, "cancelling must fully refund the reserved amount back to the vault");
+    }
+
     // ---------- Helpers ----------
+
+    /// @dev The invariant the earlier, incomplete test never actually
+    ///      exercised: contract balance == every vault's tracked balance
+    ///      PLUS every still-unresolved queued spend's reserved amount.
+    ///      Deliberately walks alice/bob only — this file's actors — the
+    ///      fuzzed version in MeridianKeel.invariant.t.sol covers arbitrary
+    ///      actor sets and call sequences.
+    function _assertFundConservation() internal view {
+        (uint256 aliceBalance,,,) = keel.vaults(alice);
+        (uint256 bobBalance,,,) = keel.vaults(bob);
+        uint256 reserved = _sumUnresolvedPendingSpends();
+        assertEq(
+            address(keel).balance,
+            aliceBalance + bobBalance + reserved,
+            "contract balance must equal vault balances plus reserved pending-spend amounts"
+        );
+    }
+
+    function _sumUnresolvedPendingSpends() internal view returns (uint256 total) {
+        uint256 count = keel.nextSpendId();
+        for (uint256 i = 0; i < count; i++) {
+            (,, uint256 amount,, bool resolved) = keel.pendingSpends(i);
+            if (!resolved) total += amount;
+        }
+    }
 
     /// @dev Walks a cap increase through its full timelock for the pranked
     ///      caller, leaving `vm.prank`/`vm.startPrank` state as it found it.

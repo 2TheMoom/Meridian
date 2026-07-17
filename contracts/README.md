@@ -2,7 +2,7 @@
 
 Keel's Hold tier (v1.1, spec section 6): a user-funded daily spend-cap vault for native MON on Monad. This is the security-critical piece of Meridian — the only part of the product that ever holds user funds.
 
-> **Status: first draft, not yet audited.** This has a full test suite and passes it, but that is not the same thing as an audit. Per the spec's own build-in-public plan, this contract goes through a public self-audit — spec thread → invariant tests thread → self-audit findings thread — published alongside the deployment. Mainnet is the only deployment target (no testnet stage — see "Deploying" below); nothing here should be treated as production-ready until the self-audit is complete and published.
+> **Status: first draft, not yet audited.** This has a full test suite and passes it, but that is not the same thing as an audit. Per the spec's own build-in-public plan, this contract goes through a public self-audit — spec thread → invariant tests thread → self-audit findings thread — published alongside deployment. **Deployed to Monad testnet only for now** (see "Deploying" below); mainnet deployment is on the roadmap and waits for the self-audit to actually happen, not for a deadline to force it.
 
 ## Design
 
@@ -30,10 +30,10 @@ forge fmt                    # or --check in CI
 
 Requires `lib/forge-std`, vendored directly in this repo (not a git submodule — see `.gitignore`).
 
-## Deploying (Monad mainnet)
+## Deploying (Monad testnet)
 
 ```bash
-cp .env.example .env   # fill in MONAD_RPC_URL, ETHERSCAN_API_KEY
+cp .env.example .env   # fill in MONAD_TESTNET_RPC_URL, ETHERSCAN_API_KEY
 
 # One-time: import the deployer key into an encrypted local keystore.
 # Prompts for the private key and a keystore password — neither touches
@@ -41,30 +41,37 @@ cp .env.example .env   # fill in MONAD_RPC_URL, ETHERSCAN_API_KEY
 cast wallet import meridian-deployer --interactive
 
 forge script script/DeployMeridianKeel.s.sol \
-  --rpc-url monad \
+  --rpc-url monad_testnet \
   --broadcast \
   --account meridian-deployer \
   --verify
 ```
 
-`--account` prompts for the keystore password at broadcast time (or set `ETH_PASSWORD`/`--password-file` for non-interactive runs). The broadcasting key becomes the contract's `owner` — see `DeployMeridianKeel.s.sol` for why that's a low-stakes role (no fund custody) and how to hand it off with `cast send <address> "transferOwnership(address)" <newOwner> --rpc-url monad --account meridian-deployer` afterward if needed.
+`--account` prompts for the keystore password at broadcast time (or set `ETH_PASSWORD`/`--password-file` for non-interactive runs). The broadcasting key becomes the contract's `owner` — see `DeployMeridianKeel.s.sol` for why that's a low-stakes role (no fund custody) and how to hand it off with `cast send <address> "transferOwnership(address)" <newOwner> --rpc-url monad_testnet --account meridian-deployer` afterward if needed.
 
-`--verify` submits source to Etherscan's V2 multichain API (serves monadscan.com) using the `[etherscan]` block in `foundry.toml`; omit it and run `forge verify-contract <address> src/MeridianKeel.sol:MeridianKeel --chain monad` separately if you'd rather verify after confirming the deployment looks right on-chain first.
+`--verify` submits source to Etherscan's V2 multichain API (serves testnet.monadexplorer.com) using the `monad_testnet` entry in `foundry.toml`'s `[etherscan]` block; omit it and run `forge verify-contract <address> src/MeridianKeel.sol:MeridianKeel --chain monad_testnet` separately if you'd rather verify after confirming the deployment looks right on-chain first.
 
-Broadcast receipts under `broadcast/*/143/` are committed as a deployment record; local anvil dry runs (`broadcast/*/31337/`) are gitignored.
+Broadcast receipts under `broadcast/*/10143/` are committed as a deployment record; local anvil dry runs (`broadcast/*/31337/`) are gitignored.
 
-**There is no testnet deployment step here.** The four-gate self-audit plan below (spec → invariant tests → self-audit findings → public review) still applies before mainnet funds should be trusted to this contract — deploying doesn't substitute for it, it just means the audit has to happen with the real contract already on-chain rather than staged on testnet first.
+**Mainnet deployment is intentionally not happening yet.** The four-gate self-audit plan (spec → invariant tests → self-audit findings → public review) has to actually run against this contract before real user funds should be trusted to it — testnet is where that happens without that risk. To deploy mainnet once the audit is done, use the `monad` rpc/etherscan entries (already configured in `foundry.toml`) in place of `monad_testnet` above.
 
 ## Test suite
 
-40 tests in `test/MeridianKeel.t.sol`, covering:
+44 deterministic tests in `test/MeridianKeel.t.sol`, plus a fuzzed invariant suite in `test/MeridianKeel.invariant.t.sol`.
+
+Deterministic coverage:
 
 - Every state transition (deposit, cap change, spend, cancel, emergency withdrawal) on both its success and failure paths
 - **Every distinct `require()` revert message in the contract has at least one dedicated test** — verified by direct cross-reference against the source, not just by trusting `forge coverage`'s branch numbers (which turned out to be an unreliable way to detect gaps here — a genuinely-tested revert path showed as 0 hits due to how the tool's branch/path numbering works with the optimizer disabled for coverage runs; treat the tool's summary as a starting point; confirming gaps by reading the contract is what actually caught the real ones)
 - Reentrancy: a `noReentrancy` guard shared across all fund-moving functions, exercised by an attacker contract that tries to re-enter both the same function and a *different* guarded function from within a callback
-- Fund conservation: the contract's own ETH balance always equals the sum of tracked vault balances
+- Fund conservation: the contract's own ETH balance always equals the sum of tracked vault balances plus every still-unresolved queued spend's reserved amount — including while a spend is actually in flight, not just before/after
 - Transfer-failure paths (a recipient that rejects plain ETH transfers) roll back cleanly with state unchanged, for all three functions that move funds out
 
-Result: 100% line, statement, branch, and function coverage on `src/MeridianKeel.sol` (`test/helpers/` coverage is lower and expected to be — those are test doubles, not production code).
+Invariant/fuzz coverage (`test/handlers/MeridianKeelHandler.sol` drives every state-changing function across 4 actors with randomized time warps, 512 runs × 500 calls = 256,000 calls per `forge test`):
 
-**What this test suite does not cover, and what a real audit should add:** fuzz/invariant testing across randomized call sequences (the current tests are all deterministic scenarios), gas griefing analysis on the reentrancy guard, and formal reasoning about the window-reset simplification's edge cases under adversarial timing.
+- **`invariant_fundConservation`** — the contract's ETH balance must equal tracked vault balances plus reserved pending-spend amounts after *any* sequence the fuzzer finds, not just the scenarios a human wrote down. Passes clean at 256,000 calls.
+- The first version of this suite also asserted `spentInWindow <= dailyCap` always — the fuzzer broke that in a handful of calls (decrease your cap below what you've already spent this window, and `spentInWindow` legitimately exceeds the new `dailyCap`). Traced by hand: not exploitable, it only forces the rest of that window's spends onto the timelocked path, never loosens anything. Real finding, wrong invariant — removed the incorrect assertion, documented the actual behavior in `setDailyCap`'s NatSpec, and pinned it down with `test_setDailyCap_decreaseBelowSpentInWindow_forcesQueuedPathForRestOfWindow`. Left in this README because it's a good example of what fuzzing is actually for: it found something a careful read-through hadn't surfaced, and it was cheaper to catch here than after real funds were involved.
+
+Result: 100% line, statement, branch, and function coverage on `src/MeridianKeel.sol` (`test/helpers/` and `test/handlers/` coverage is lower and expected to be — those are test doubles, not production code).
+
+**What this test suite still does not cover, and what a real audit should add:** gas griefing analysis on the reentrancy guard, and formal reasoning about the window-reset simplification's edge cases under adversarial timing.

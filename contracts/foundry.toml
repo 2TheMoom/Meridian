@@ -12,12 +12,24 @@ line_length = 120
 tab_width = 4
 bracket_spacing = false
 
+# Depth/runs deliberately well above forge's defaults (256 runs / depth 15) —
+# this is the suite that's supposed to catch what hand-written scenarios
+# miss, so it needs a real budget. ~1.28M calls per invariant per run
+# locally; CI can lower this via FOUNDRY_PROFILE if it gets too slow.
+[invariant]
+runs = 512
+depth = 500
+fail_on_revert = false
+
 # Env vars read from contracts/.env (see .env.example) or the shell.
 [rpc_endpoints]
 monad = "${MONAD_RPC_URL}"
+monad_testnet = "${MONAD_TESTNET_RPC_URL}"
 
-# Etherscan V2 multichain API (chain 143 = Monad mainnet); same host serves monadscan.com.
+# Etherscan V2 multichain API (chain 143 = Monad mainnet, 10143 = testnet);
+# same host serves monadscan.com / testnet.monadexplorer.com.
 [etherscan]
 monad = { key = "${ETHERSCAN_API_KEY}", chain = 143, url = "https://api.etherscan.io/v2/api" }
+monad_testnet = { key = "${ETHERSCAN_API_KEY}", chain = 10143, url = "https://api.etherscan.io/v2/api" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

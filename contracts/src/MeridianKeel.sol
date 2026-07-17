@@ -110,6 +110,21 @@ contract MeridianKeel {
     ///         since that raises spending power from zero — is timelocked.
     ///         That's deliberate: the timelock is the anti-impulse mechanic
     ///         this whole tier exists for, not just a guard against attackers.
+    /// @dev    An instant decrease never touches spentInWindow. If you've
+    ///         already spent more this window than your new (lower) cap
+    ///         allows, spentInWindow now exceeds dailyCap — spend()'s
+    ///         `spentInWindow + amount <= dailyCap` check means every
+    ///         further spend() call this window takes the timelocked
+    ///         over-cap path, not the instant one, regardless of how small
+    ///         the amount is, until the window rolls over. This is
+    ///         intentional and safe (found by invariant fuzzing, not by
+    ///         inspection — see MeridianKeel.invariant.t.sol and
+    ///         test_setDailyCap_decreaseBelowSpentInWindow_forcesQueuedPathForRestOfWindow):
+    ///         it can only make remaining spending in the window *more*
+    ///         restricted than before, never less. Retroactively clamping
+    ///         spentInWindow down to match would be the actual bug — it
+    ///         would let a cap decrease silently buy back spending room in
+    ///         the same window, undermining the cap it just set.
     function setDailyCap(uint256 newCap) external {
         Vault storage v = vaults[msg.sender];
         if (newCap <= v.dailyCap) {

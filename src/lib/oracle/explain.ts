@@ -112,12 +112,17 @@ function getClient(): Anthropic {
 }
 
 /**
- * Calls Claude to narrate a Moment that Oracle's rules engine already
- * scored. Never sends the score, and falls back to a deterministic,
- * on-brand template if the call fails or the response drifts off the
- * restraint-only product principle (see spec section 6).
+ * Shared by explainMoment (a Moment already happened, past tense) and
+ * explainGuardCheck (nothing has happened yet, forward-looking) — same
+ * calling/validation/fallback mechanics, different system prompt and
+ * fallback copy per caller, since the two contexts can't share tense
+ * without producing factually wrong text in one of them.
  */
-export async function explainMoment(input: ExplanationInput): Promise<Explanation> {
+async function callExplainModel(
+  systemPrompt: string,
+  input: ExplanationInput,
+  fallbacks: Record<RuleId, Explanation>,
+): Promise<Explanation> {
   try {
     const response = await getClient().messages.create({
       model: MODEL,
@@ -127,7 +132,7 @@ export async function explainMoment(input: ExplanationInput): Promise<Explanatio
         effort: "low",
         format: { type: "json_schema", schema: explanationSchema },
       },
-      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
       messages: [
         {
           role: "user",
@@ -142,28 +147,76 @@ export async function explainMoment(input: ExplanationInput): Promise<Explanatio
     });
 
     if (response.stop_reason === "refusal") {
-      return FALLBACK_EXPLANATIONS[input.ruleId];
+      return fallbacks[input.ruleId];
     }
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
-      return FALLBACK_EXPLANATIONS[input.ruleId];
+      return fallbacks[input.ruleId];
     }
 
     const parsed: unknown = JSON.parse(textBlock.text);
     if (!isValidExplanation(parsed)) {
-      return FALLBACK_EXPLANATIONS[input.ruleId];
+      return fallbacks[input.ruleId];
     }
     if (violatesRestraintPrinciple(parsed)) {
       console.warn(`[oracle] explanation for ${input.ruleId} failed restraint-principle check, using fallback`);
-      return FALLBACK_EXPLANATIONS[input.ruleId];
+      return fallbacks[input.ruleId];
     }
 
     return parsed;
   } catch (err) {
     console.error("[oracle] explanation call failed, using fallback", err);
-    return FALLBACK_EXPLANATIONS[input.ruleId];
+    return fallbacks[input.ruleId];
   }
+}
+
+/**
+ * Calls Claude to narrate a Moment that Oracle's rules engine already
+ * scored. Never sends the score, and falls back to a deterministic,
+ * on-brand template if the call fails or the response drifts off the
+ * restraint-only product principle (see spec section 6).
+ */
+export async function explainMoment(input: ExplanationInput): Promise<Explanation> {
+  return callExplainModel(SYSTEM_PROMPT, input, FALLBACK_EXPLANATIONS);
+}
+
+const GUARD_SYSTEM_PROMPT = `You are Guard, the pre-sign explanation layer for Meridian, a wallet-safety product on Monad.
+
+A deterministic check has evaluated a contract or spender address the user is considering approving — nothing has been signed or approved yet. You do not see the numeric verdict, and you must never guess, state, or imply a numeric score, risk level, or ranking. Your only job is to explain, in plain language and strictly forward-looking tense (this WOULD be risky if approved, not this IS or WAS), why approving this address would be worth hesitating over, from the raw facts you're given.
+
+Respond in exactly two parts:
+1. "why": one or two sentences, plain language, forward-looking, explaining why approving this address would be worth hesitating over given the facts provided.
+2. "saferAlternative": one or two sentences, what to do instead of approving as-is.
+
+"saferAlternative" must be restraint-oriented only: wait, research further, grant a capped/limited approval instead of unlimited, or decline. Never suggest leverage, yield-chasing, hedging, or any other speculative repositioning. Meridian counsels restraint, not alternative financial strategies.
+
+Do not use em dashes. Do not mention or imply any numeric score. Do not add content beyond the two required sentences per part. Never phrase this as if the approval already happened — it has not.`;
+
+const GUARD_FALLBACK_EXPLANATIONS: Record<RuleId, Explanation> = {
+  R1: {
+    why: "Approving this address without a limit would let it move far more than you intend to spend right now, especially if the contract is unproven or unverified.",
+    saferAlternative: "Grant a capped approval for only what you need instead, or wait and research the contract further.",
+  },
+  R2: FALLBACK_EXPLANATIONS.R2,
+  R3: FALLBACK_EXPLANATIONS.R3,
+  R4: {
+    why: "You have not interacted with this contract before, and it has not been reviewed against Meridian's allowlist.",
+    saferAlternative: "Consider waiting and researching the contract before sending value or approving it.",
+  },
+  R5: FALLBACK_EXPLANATIONS.R5,
+  R6: {
+    why: "Approving this address would give it blanket control over your entire NFT collection, not just one item, so it could move any of them at any time.",
+    saferAlternative: "Decline for now, or only grant access at the moment you actually need it for a specific transaction.",
+  },
+};
+
+/**
+ * Guard's counterpart to explainMoment — same mechanics, forward-looking
+ * framing, since nothing has actually happened yet at the point Guard runs.
+ */
+export async function explainGuardCheck(input: ExplanationInput): Promise<Explanation> {
+  return callExplainModel(GUARD_SYSTEM_PROMPT, input, GUARD_FALLBACK_EXPLANATIONS);
 }
 
 // Common interface for anything that can produce moments.oracle_text from an
