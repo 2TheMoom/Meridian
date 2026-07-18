@@ -1,16 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AppHeader } from "@/components/AppHeader";
+import { AppHeader } from "@/components/layout/AppHeader";
 import { AuthGate } from "@/components/AuthGate";
 import { BackLink } from "@/components/ui/BackLink";
 import { Panel } from "@/components/ui/Panel";
 import { MomentCard } from "@/components/MomentCard";
 import { WalletSelect } from "@/components/WalletSelect";
 import { useAuthedFetch } from "@/hooks/useAuthedFetch";
-import type { Moment } from "@/lib/oracle/types";
+import type { Moment, RuleId } from "@/lib/oracle/types";
 
 type Wallet = { id: string; address: string; label: string | null; chain_id: number };
+type PolicyRow = { rule_id: RuleId; tier: "off" | "notify" | "confirm" };
 
 function dayKey(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -35,6 +36,7 @@ function TimelineContent() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [selectedWalletId, setSelectedWalletId] = useState<string | null>(null);
   const [moments, setMoments] = useState<Moment[] | null>(null);
+  const [policies, setPolicies] = useState<PolicyRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
 
@@ -58,6 +60,15 @@ function TimelineContent() {
       .then((res) => res.json())
       .then((body: { moments?: Moment[] }) => setMoments(body.moments ?? []))
       .catch(() => setError("Failed to load timeline."));
+
+    // Revoke is only offered when the wallet's own guardrail for that rule
+    // is set to Confirm — without this, Notify and Confirm looked and
+    // behaved identically, which was the whole reason Confirm's purpose
+    // wasn't clear.
+    authedFetch(`/api/policies?wallet=${selectedWalletId}`)
+      .then((res) => res.json())
+      .then((body: { policies?: PolicyRow[] }) => setPolicies(body.policies ?? []))
+      .catch(() => {});
   }, [selectedWalletId, authedFetch]);
 
   const updateStatus = useCallback(
@@ -120,6 +131,7 @@ function TimelineContent() {
                     moment={moment}
                     chainId={selectedWallet?.chain_id ?? 143}
                     walletAddress={selectedWallet?.address ?? null}
+                    canRevoke={policies.find((p) => p.rule_id === moment.rule_id)?.tier === "confirm"}
                     onAcknowledge={(id) => updateStatus(id, "acked")}
                     onDismiss={(id) => updateStatus(id, "dismissed")}
                     onRevoked={(id) =>

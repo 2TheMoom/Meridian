@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { formatEther, parseEther } from "viem";
-import { AppHeader } from "@/components/AppHeader";
+import { AppHeader } from "@/components/layout/AppHeader";
 import { AuthGate } from "@/components/AuthGate";
 import { BackLink } from "@/components/ui/BackLink";
 import { Button } from "@/components/ui/Button";
@@ -17,7 +17,21 @@ type Tier = "off" | "notify" | "confirm";
 type PolicyRow = { rule_id: RuleId; tier: Tier; threshold: Record<string, unknown> };
 
 const RULE_ORDER: RuleId[] = ["R1", "R2", "R3", "R4", "R5", "R6"];
-const TIERS: Tier[] = ["off", "notify", "confirm"];
+
+// Confirm only means anything for R1/R6 — those are the only rules with a
+// one-tap revoke action wired up (RevokeButton on Timeline). Offering it as
+// a real choice for R2-R5, where it has no additional effect over Notify
+// today, would be dishonest — so it's just not an option there.
+const REVOKABLE_RULES: RuleId[] = ["R1", "R6"];
+function tiersFor(ruleId: RuleId): Tier[] {
+  return REVOKABLE_RULES.includes(ruleId) ? ["off", "notify", "confirm"] : ["off", "notify"];
+}
+
+const TIER_DESCRIPTIONS: Record<Tier, string> = {
+  off: "This rule never fires for this wallet — no Moment, no email.",
+  notify: "You get a Moment and an email when this fires. No in-app action beyond acknowledging or dismissing it.",
+  confirm: "Everything Notify does, plus a one-tap revoke button right on the Moment in Timeline.",
+};
 
 function GuardrailsContent() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -129,6 +143,22 @@ function GuardrailsContent() {
         <p className="font-body text-dim">Loading...</p>
       ) : (
         <div className="flex flex-col gap-4">
+          <Panel className="flex flex-col gap-2">
+            <p className="font-technical text-[11px] uppercase tracking-widest text-dim">What each tier does</p>
+            <dl className="flex flex-col gap-1.5 font-body text-sm">
+              {(["off", "notify", "confirm"] as Tier[]).map((tier) => (
+                <div key={tier} className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                  <dt className="w-20 shrink-0 font-technical text-xs uppercase tracking-wide text-brass">{tier}</dt>
+                  <dd className="text-dim">{TIER_DESCRIPTIONS[tier]}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-1 font-body text-xs text-dim">
+              Confirm is only offered for Risky Approval and NFT Approval Risk — the other rules don&apos;t have a
+              revoke action to enable yet.
+            </p>
+          </Panel>
+
           <Panel as="label" className="flex flex-col gap-1 font-body text-sm text-dim">
             Notification email — Notify/Confirm-tier Moments email here. Leave blank to get in-app only.
             <input
@@ -148,10 +178,11 @@ function GuardrailsContent() {
                 <div className="flex items-center justify-between">
                   <span className="font-display text-lg text-paper">{RULE_LABELS[ruleId]}</span>
                   <div className="flex gap-1">
-                    {TIERS.map((tier) => (
+                    {tiersFor(ruleId).map((tier) => (
                       <button
                         key={tier}
                         onClick={() => setTier(ruleId, tier)}
+                        title={TIER_DESCRIPTIONS[tier]}
                         className={`px-2 py-1 font-technical text-xs uppercase tracking-wide ${
                           policy.tier === tier ? "bg-brass text-ink" : "border border-paper/20 text-dim"
                         }`}

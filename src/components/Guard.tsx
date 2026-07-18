@@ -4,6 +4,7 @@ import { useState } from "react";
 import { isAddress } from "viem";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
+import { RULE_LABELS } from "@/lib/oracle/labels";
 
 type GuardVerdict = "safe" | "caution" | "danger" | "not-a-contract";
 
@@ -13,6 +14,8 @@ type GuardResult = {
   contractAgeDays: number | null;
   verifiedOnExplorer: boolean | null;
   allowlisted: boolean;
+  incidentWalletCount: number;
+  incidentMomentCount: number;
   verdict: GuardVerdict;
   score: number;
   explanation: { why: string; saferAlternative: string } | null;
@@ -107,7 +110,16 @@ export function Guard() {
             </p>
           ) : (
             <>
-              <dl className="mt-3 grid grid-cols-3 gap-2 font-technical text-xs text-dim">
+              {result.incidentWalletCount > 0 && (
+                <p className="mt-3 border border-danger/40 bg-danger/10 px-3 py-2 font-body text-sm text-danger">
+                  Flagged for {RULE_LABELS.R1.toLowerCase()} in {result.incidentMomentCount}{" "}
+                  {result.incidentMomentCount === 1 ? "Moment" : "Moments"} across {result.incidentWalletCount}{" "}
+                  other Meridian-monitored {result.incidentWalletCount === 1 ? "wallet" : "wallets"} — this isn&apos;t
+                  a static list, it&apos;s what actually happened.
+                </p>
+              )}
+
+              <dl className="mt-3 grid grid-cols-2 gap-2 font-technical text-xs text-dim sm:grid-cols-4">
                 <div>
                   <dt className="uppercase tracking-widest">Allowlisted</dt>
                   <dd className="mt-1 text-paper">{result.allowlisted ? "Yes" : "No"}</dd>
@@ -124,7 +136,19 @@ export function Guard() {
                     {result.verifiedOnExplorer === null ? "Unknown" : result.verifiedOnExplorer ? "Yes" : "No"}
                   </dd>
                 </div>
+                <div>
+                  <dt className="uppercase tracking-widest">Meridian incidents</dt>
+                  <dd className="mt-1 text-paper">
+                    {result.incidentWalletCount > 0 ? `${result.incidentWalletCount} wallets` : "None yet"}
+                  </dd>
+                </div>
               </dl>
+              {result.incidentWalletCount === 0 && (
+                <p className="mt-2 font-body text-xs text-dim">
+                  No incidents in Meridian&apos;s own history — Meridian is new, so this reflects limited data, not a
+                  guarantee.
+                </p>
+              )}
               {result.explanation && (
                 <div className="mt-4 flex flex-col gap-2 font-body text-sm text-paper">
                   <p>{result.explanation.why}</p>

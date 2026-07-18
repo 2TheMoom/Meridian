@@ -1,6 +1,6 @@
 "use client";
 
-import { AppHeader } from "@/components/AppHeader";
+import { AppHeader } from "@/components/layout/AppHeader";
 import { GetStarted } from "@/components/GetStarted";
 import { Guard } from "@/components/Guard";
 

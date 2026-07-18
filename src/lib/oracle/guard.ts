@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { R1_DEFAULT_CONFIG, scoreR1RiskyApproval } from "./rules/r1RiskyApproval";
 import type { RuleId } from "./types";
 
@@ -7,6 +8,7 @@ export type GuardInput = {
   contractAgeDays: number | null;
   allowlisted: boolean;
   verifiedOnExplorer: boolean | null;
+  incidentWalletCount: number;
 };
 
 export type GuardCheck = {
@@ -16,6 +18,37 @@ export type GuardCheck = {
   ruleId: RuleId;
   details: Record<string, unknown>;
 };
+
+export type IncidentSignal = {
+  walletCount: number;
+  momentCount: number;
+};
+
+/**
+ * How many of Meridian's own registered wallets have actually been flagged
+ * (a real Moment, not just an approval) against this exact spender — the
+ * one signal in Guard that isn't curated by anyone. It grows from real
+ * usage instead of needing an address added to a list by hand, which is
+ * the fix for Guard leaning on a manually-maintained allowlist for
+ * everything. Bounded to the first 500 matches: this is a live API call,
+ * not a batch report, and Meridian's total moment volume is nowhere near
+ * that yet — revisit with a real `count(distinct wallet_id)` SQL aggregate
+ * if it ever needs to be.
+ */
+export async function getIncidentSignal(supabase: SupabaseClient, address: string): Promise<IncidentSignal> {
+  const { data, error } = await supabase
+    .from("moments")
+    .select("wallet_id")
+    .eq("context->>spender", address.toLowerCase())
+    .limit(500);
+
+  if (error || !data) return { walletCount: 0, momentCount: 0 };
+
+  return {
+    walletCount: new Set(data.map((row) => row.wallet_id as string)).size,
+    momentCount: data.length,
+  };
+}
 
 /**
  * Guard answers "should I approve this address" — before a signature, not
@@ -28,6 +61,11 @@ export type GuardCheck = {
  * boundary is the actually meaningful signal for "should I be worried right
  * now": a young, unvetted contract is the classic drainer pattern; an old,
  * unvetted one merely hasn't been reviewed by us yet.
+ *
+ * Real incident history outranks everything else, including the allowlist —
+ * a curated list is an opinion formed in advance; a wallet that actually got
+ * flagged interacting with this exact address is observed evidence, and
+ * evidence beats opinion even for something otherwise vetted.
  */
 export function evaluateGuard(input: GuardInput): GuardCheck {
   const isYoungContract = input.contractAgeDays !== null && input.contractAgeDays < R1_DEFAULT_CONFIG.youngContractDays;
@@ -42,17 +80,17 @@ export function evaluateGuard(input: GuardInput): GuardCheck {
     allowlisted: input.allowlisted,
   });
 
+  const details = { ...input, isYoungContract };
+
+  if (input.incidentWalletCount > 0) {
+    return { verdict: "danger", score: 100, isYoungContract, ruleId: "R1", details };
+  }
+
   if (input.allowlisted) {
-    return { verdict: "safe", score: 0, isYoungContract, ruleId: "R1", details: { ...input, isYoungContract } };
+    return { verdict: "safe", score: 0, isYoungContract, ruleId: "R1", details };
   }
 
   const verdict: GuardVerdict = isYoungContract || input.verifiedOnExplorer === false ? "danger" : "caution";
 
-  return {
-    verdict,
-    score: scored.score,
-    isYoungContract,
-    ruleId: "R1",
-    details: { ...input, isYoungContract },
-  };
+  return { verdict, score: scored.score, isYoungContract, ruleId: "R1", details };
 }

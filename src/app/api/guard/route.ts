@@ -3,9 +3,10 @@ import { createPublicClient, http, isAddress } from "viem";
 import { NextRequest, NextResponse } from "next/server";
 import { getContractAgeDays, isContractAddress } from "@/lib/horizon/contractAge";
 import { getVerificationStatus } from "@/lib/horizon/explorerVerification";
-import { evaluateGuard } from "@/lib/oracle/guard";
+import { evaluateGuard, getIncidentSignal } from "@/lib/oracle/guard";
 import { explainGuardCheck } from "@/lib/oracle/explain";
 import { monad, monadTestnet } from "@/lib/chain";
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 
 const SUPPORTED_CHAIN_IDS = [143, 10143] as const;
 
@@ -59,18 +60,32 @@ export async function GET(req: NextRequest) {
       allowlisted: false,
       verdict: "not-a-contract" as const,
       score: 0,
+      incidentWalletCount: 0,
+      incidentMomentCount: 0,
       explanation: null,
     });
   }
 
-  const [contractAgeDays, verifiedOnExplorer, allowlistRow] = await Promise.all([
+  // Service-role, not the anon client above: this needs to see across every
+  // user's moments to count real incidents, which per-user RLS on `moments`
+  // otherwise (correctly) blocks. Only ever returns an aggregate count to
+  // the caller — never a raw wallet_id, user_id, or moment row.
+  const serviceRoleSupabase = createServiceRoleSupabaseClient();
+
+  const [contractAgeDays, verifiedOnExplorer, allowlistRow, incidentSignal] = await Promise.all([
     getContractAgeDays(client, address),
     getVerificationStatus(chainId, address),
     supabase.from("allowlist").select("address").eq("chain_id", chainId).eq("address", address.toLowerCase()).maybeSingle(),
+    getIncidentSignal(serviceRoleSupabase, address),
   ]);
 
   const allowlisted = Boolean(allowlistRow.data);
-  const result = evaluateGuard({ contractAgeDays, allowlisted, verifiedOnExplorer });
+  const result = evaluateGuard({
+    contractAgeDays,
+    allowlisted,
+    verifiedOnExplorer,
+    incidentWalletCount: incidentSignal.walletCount,
+  });
 
   const explanation =
     result.verdict === "safe"
@@ -87,6 +102,8 @@ export async function GET(req: NextRequest) {
     contractAgeDays,
     verifiedOnExplorer,
     allowlisted,
+    incidentWalletCount: incidentSignal.walletCount,
+    incidentMomentCount: incidentSignal.momentCount,
     verdict: result.verdict,
     score: result.score,
     explanation,

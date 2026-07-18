@@ -32,6 +32,7 @@ export function MomentCard({
   moment,
   chainId,
   walletAddress,
+  canRevoke,
   onAcknowledge,
   onDismiss,
   onRevoked,
@@ -40,6 +41,7 @@ export function MomentCard({
   moment: Moment;
   chainId: number;
   walletAddress: string | null;
+  canRevoke: boolean;
   onAcknowledge: (id: string) => void;
   onDismiss: (id: string) => void;
   onRevoked: (id: string) => void;
@@ -88,15 +90,21 @@ export function MomentCard({
             Dismiss
           </Button>
           {(moment.rule_id === "R1" || moment.rule_id === "R6") && token && spender && (
-            <RevokeButton
-              momentId={moment.id}
-              ruleId={moment.rule_id}
-              token={token}
-              spender={spender}
-              chainId={chainId}
-              walletAddress={walletAddress}
-              onRevoked={() => onRevoked(moment.id)}
-            />
+            canRevoke ? (
+              <RevokeButton
+                momentId={moment.id}
+                ruleId={moment.rule_id}
+                token={token}
+                spender={spender}
+                chainId={chainId}
+                walletAddress={walletAddress}
+                onRevoked={() => onRevoked(moment.id)}
+              />
+            ) : (
+              <p className="font-body text-xs text-dim">
+                Set {RULE_LABELS[moment.rule_id]} to Confirm in Guardrails to revoke this from here.
+              </p>
+            )
           )}
         </div>
       ) : (

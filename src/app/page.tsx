@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Dashboard } from "@/components/Dashboard";
-import { Landing } from "@/components/Landing";
+import { Dashboard } from "@/components/layout/Dashboard";
+import { Landing } from "@/components/layout/Landing";
 
 type View = "landing" | "dashboard";
 
