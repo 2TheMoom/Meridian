@@ -35,6 +35,13 @@ const TIER_DESCRIPTIONS: Record<Tier, string> = {
 
 function GuardrailsContent() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  // Without this, "no wallets yet" and "haven't fetched wallets yet" were
+  // both just wallets.length === 0 — and since the policies fetch below is
+  // gated on selectedWalletId (which never gets set with zero wallets),
+  // the page was stuck on "Loading..." forever for anyone signed in who
+  // hadn't registered a wallet, instead of the same "register one" prompt
+  // Timeline already shows for the same situation.
+  const [walletsLoaded, setWalletsLoaded] = useState(false);
   const [selectedWalletId, setSelectedWalletId] = useState<string | null>(null);
   const [policies, setPolicies] = useState<PolicyRow[] | null>(null);
   const [floorMon, setFloorMon] = useState("");
@@ -52,7 +59,8 @@ function GuardrailsContent() {
         setWallets(list);
         setSelectedWalletId((current) => current ?? list[0]?.id ?? null);
       })
-      .catch(() => setError("Failed to load wallets."));
+      .catch(() => setError("Failed to load wallets."))
+      .finally(() => setWalletsLoaded(true));
   }, [authedFetch]);
 
   useEffect(() => {
@@ -139,7 +147,13 @@ function GuardrailsContent() {
 
       {error && <p className="font-body text-sm text-danger">{error}</p>}
 
-      {policies === null ? (
+      {!walletsLoaded ? (
+        <p className="font-body text-dim">Loading...</p>
+      ) : wallets.length === 0 ? (
+        <p className="font-body text-dim">
+          No wallet registered yet. <BackLink href="/dashboard" label="Register one" />
+        </p>
+      ) : policies === null ? (
         <p className="font-body text-dim">Loading...</p>
       ) : (
         <div className="flex flex-col gap-4">
