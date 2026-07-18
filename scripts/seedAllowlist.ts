@@ -43,6 +43,36 @@ type AllowlistRow = {
   source: string;
 };
 
+/**
+ * Manually-curated supplement to the upstream protocols repo, which — as of
+ * 2026-07-18 — lists Circle's CCTP bridge infrastructure but not the USDC
+ * token contract itself, so a Guard check on real USDC came back "not
+ * allowlisted" despite being about as legitimate an asset as exists on
+ * Monad. Every entry here was cross-verified three ways before being added:
+ * (1) Circle's own official contract-address registry
+ * (developers.circle.com/stablecoins/usdc-contract-addresses), (2) real
+ * bytecode present on-chain via eth_getCode, (3) symbol()/name() read
+ * on-chain matching the expected token. Add sparingly — this exists to
+ * close specific, verified gaps in the upstream source, not to become a
+ * second protocols repo maintained by hand.
+ */
+const KNOWN_ASSETS: AllowlistRow[] = [
+  {
+    address: "0x754704bc059f8c67012fed69bc8a327a5aafb603",
+    chain_id: 143,
+    name: "USDC",
+    category: "Asset::Stablecoin",
+    source: "circle-official-contract-registry",
+  },
+  {
+    address: "0x534b2f3a21130d7a60830c2df862319e593943a3",
+    chain_id: 10143,
+    name: "USDC",
+    category: "Asset::Stablecoin",
+    source: "circle-official-contract-registry",
+  },
+];
+
 function toAllowlistRows(protocols: ProtocolsFile, chainId: number, includeNonLive: boolean): AllowlistRow[] {
   const rows: AllowlistRow[] = [];
 
@@ -100,6 +130,13 @@ async function main() {
       totalUpserted += batch.length;
     }
   }
+
+  console.log(`upserting ${KNOWN_ASSETS.length} manually-curated known-asset rows...`);
+  const { error: knownAssetsError } = await supabase
+    .from("allowlist")
+    .upsert(KNOWN_ASSETS, { onConflict: "address,chain_id" });
+  if (knownAssetsError) throw new Error(`upsert failed for known assets: ${knownAssetsError.message}`);
+  totalUpserted += KNOWN_ASSETS.length;
 
   console.log(`done — upserted ${totalUpserted} allowlist rows across ${NETWORKS.length} networks`);
 }
