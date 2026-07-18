@@ -1,7 +1,7 @@
 import { R1_DEFAULT_CONFIG, scoreR1RiskyApproval } from "./rules/r1RiskyApproval";
 import type { RuleId } from "./types";
 
-export type GuardVerdict = "safe" | "caution" | "danger";
+export type GuardVerdict = "safe" | "caution" | "danger" | "not-a-contract";
 
 export type GuardInput = {
   contractAgeDays: number | null;

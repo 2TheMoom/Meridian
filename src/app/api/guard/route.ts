@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { createPublicClient, http, isAddress } from "viem";
 import { NextRequest, NextResponse } from "next/server";
-import { getContractAgeDays } from "@/lib/horizon/contractAge";
+import { getContractAgeDays, isContractAddress } from "@/lib/horizon/contractAge";
 import { getVerificationStatus } from "@/lib/horizon/explorerVerification";
 import { evaluateGuard } from "@/lib/oracle/guard";
 import { explainGuardCheck } from "@/lib/oracle/explain";
@@ -43,6 +43,25 @@ export async function GET(req: NextRequest) {
 
   const client = clientFor(chainId);
   const supabase = anonSupabaseClient();
+
+  // A plain wallet address has no code at all — running contract-risk
+  // language ("this contract's source is unverified") on it is actively
+  // misleading, not just imprecise. Check this before anything else so an
+  // EOA never reaches getContractAgeDays, whose "unknown" return is
+  // otherwise indistinguishable from a real contract's failed age lookup.
+  const isContract = await isContractAddress(client, address);
+  if (!isContract) {
+    return NextResponse.json({
+      address: address.toLowerCase(),
+      chainId,
+      contractAgeDays: null,
+      verifiedOnExplorer: null,
+      allowlisted: false,
+      verdict: "not-a-contract" as const,
+      score: 0,
+      explanation: null,
+    });
+  }
 
   const [contractAgeDays, verifiedOnExplorer, allowlistRow] = await Promise.all([
     getContractAgeDays(client, address),

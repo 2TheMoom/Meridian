@@ -5,7 +5,7 @@ import { isAddress } from "viem";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
 
-type GuardVerdict = "safe" | "caution" | "danger";
+type GuardVerdict = "safe" | "caution" | "danger" | "not-a-contract";
 
 type GuardResult = {
   address: string;
@@ -22,6 +22,7 @@ const VERDICT_STYLES: Record<GuardVerdict, { label: string; color: string; borde
   safe: { label: "Safe to approve", color: "text-signal", border: "border-signal/40" },
   caution: { label: "Proceed with caution", color: "text-brass", border: "border-brass/40" },
   danger: { label: "Don't approve this", color: "text-danger", border: "border-danger/40" },
+  "not-a-contract": { label: "This is a wallet, not a contract", color: "text-paper", border: "border-paper/20" },
 };
 
 // The proactive half of Meridian: a contract/spender address can be checked
@@ -96,29 +97,41 @@ export function Guard() {
           <p className={`font-display text-lg ${VERDICT_STYLES[result.verdict].color}`}>
             {VERDICT_STYLES[result.verdict].label}
           </p>
-          <dl className="mt-3 grid grid-cols-3 gap-2 font-technical text-xs text-dim">
-            <div>
-              <dt className="uppercase tracking-widest">Allowlisted</dt>
-              <dd className="mt-1 text-paper">{result.allowlisted ? "Yes" : "No"}</dd>
-            </div>
-            <div>
-              <dt className="uppercase tracking-widest">Contract age</dt>
-              <dd className="mt-1 text-paper">
-                {result.contractAgeDays === null ? "Unknown" : `${Math.floor(result.contractAgeDays)}d`}
-              </dd>
-            </div>
-            <div>
-              <dt className="uppercase tracking-widest">Verified</dt>
-              <dd className="mt-1 text-paper">
-                {result.verifiedOnExplorer === null ? "Unknown" : result.verifiedOnExplorer ? "Yes" : "No"}
-              </dd>
-            </div>
-          </dl>
-          {result.explanation && (
-            <div className="mt-4 flex flex-col gap-2 font-body text-sm text-paper">
-              <p>{result.explanation.why}</p>
-              <p className="text-dim">{result.explanation.saferAlternative}</p>
-            </div>
+
+          {result.verdict === "not-a-contract" ? (
+            <p className="mt-3 font-body text-sm text-dim">
+              This address has no contract code — it&apos;s a regular wallet. Approving it means giving a person
+              direct control over your tokens, not a dApp&apos;s code, which is unusual outside things like a
+              multisig co-signer. Double check this is really who you meant to approve, not a contract address
+              pasted wrong.
+            </p>
+          ) : (
+            <>
+              <dl className="mt-3 grid grid-cols-3 gap-2 font-technical text-xs text-dim">
+                <div>
+                  <dt className="uppercase tracking-widest">Allowlisted</dt>
+                  <dd className="mt-1 text-paper">{result.allowlisted ? "Yes" : "No"}</dd>
+                </div>
+                <div>
+                  <dt className="uppercase tracking-widest">Contract age</dt>
+                  <dd className="mt-1 text-paper">
+                    {result.contractAgeDays === null ? "Unknown" : `${Math.floor(result.contractAgeDays)}d`}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="uppercase tracking-widest">Verified</dt>
+                  <dd className="mt-1 text-paper">
+                    {result.verifiedOnExplorer === null ? "Unknown" : result.verifiedOnExplorer ? "Yes" : "No"}
+                  </dd>
+                </div>
+              </dl>
+              {result.explanation && (
+                <div className="mt-4 flex flex-col gap-2 font-body text-sm text-paper">
+                  <p>{result.explanation.why}</p>
+                  <p className="text-dim">{result.explanation.saferAlternative}</p>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

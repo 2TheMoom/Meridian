@@ -42,6 +42,27 @@ async function findDeploymentBlock(client: PublicClient, address: Address): Prom
 }
 
 /**
+ * Whether `address` currently has any contract bytecode at all — a single
+ * cheap `eth_getCode` at the latest block, deliberately separate from
+ * getContractAgeDays below. That function returns the same `null` whether
+ * an address isn't a contract or the archive lookup merely failed, which
+ * is the right call for R1/R4 (neither treats "unknown" as a penalty
+ * either way) but wrong for Guard: a plain wallet address and a contract
+ * whose age we couldn't determine need completely different messaging, not
+ * the same "age unknown" line applied to something that was never a
+ * contract in the first place.
+ */
+export async function isContractAddress(client: PublicClient, address: Address): Promise<boolean> {
+  try {
+    const code = await client.getCode({ address });
+    return code !== undefined && code !== "0x";
+  } catch (err) {
+    console.error(`[horizon] isContractAddress lookup failed for ${address}`, err);
+    return true; // fail open to the existing contract-risk path, not the "not a contract" one
+  }
+}
+
+/**
  * Contract age in days, for R1/R4's "young contract" bonus. Returns null
  * (unknown — never treated as a penalty on its own, per both rules'
  * design) if the address isn't a contract, or if the lookup fails for any
