@@ -25,10 +25,11 @@ export function RulesShowcase() {
       <blockquote className="border-l border-brass/40 pl-5">
         <p className="font-technical text-[11px] uppercase tracking-widest text-dim">An honest note on protection</p>
         <p className="mt-2 max-w-2xl font-body text-sm leading-relaxed text-paper/80">
-          Meridian reduces regret; it doesn&apos;t eliminate risk. A Moment only fires after Horizon has seen the
-          activity — it cannot stop a transaction from landing, only help you act fast afterward. Confirm-tier
-          revokes are independently verified on-chain, never client-trusted. Hold tier (
-          <span className="font-technical">MeridianKeel.sol</span>) is a first draft, not yet audited.
+          These six rules score a Moment after Horizon has already seen the activity — they inform Notify and
+          Confirm, which respond fast but can&apos;t stop a transaction from landing. Guard is the one part that runs
+          before you sign, but it&apos;s advisory: nothing stops you from ignoring its verdict. Hold tier (
+          <span className="font-technical">MeridianKeel.sol</span>) is the only structural enforcement — a first
+          draft, not yet audited, deployed to Monad testnet only.
         </p>
       </blockquote>
     </div>

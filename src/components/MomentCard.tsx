@@ -2,6 +2,8 @@
 
 import { RULE_LABELS } from "@/lib/oracle/labels";
 import type { Moment } from "@/lib/oracle/types";
+import { Button } from "@/components/ui/Button";
+import { Panel } from "@/components/ui/Panel";
 import { RevokeButton } from "./RevokeButton";
 
 const DANGER_THRESHOLD = 85; // spec section 7: reserved for score >= 85 only
@@ -29,6 +31,7 @@ function truncateAddress(address: string): string {
 export function MomentCard({
   moment,
   chainId,
+  walletAddress,
   onAcknowledge,
   onDismiss,
   onRevoked,
@@ -36,6 +39,7 @@ export function MomentCard({
 }: {
   moment: Moment;
   chainId: number;
+  walletAddress: string | null;
   onAcknowledge: (id: string) => void;
   onDismiss: (id: string) => void;
   onRevoked: (id: string) => void;
@@ -48,7 +52,7 @@ export function MomentCard({
   const isOpen = moment.status === "open";
 
   return (
-    <div className={`border-l-2 bg-ink-raised p-4 ${isSevere ? "border-danger" : "border-brass"}`}>
+    <Panel accent={isSevere ? "left-danger" : "left-brass"} size="sm">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span
@@ -77,20 +81,12 @@ export function MomentCard({
 
       {isOpen ? (
         <div className="mt-4 flex flex-wrap items-start gap-2">
-          <button
-            onClick={() => onAcknowledge(moment.id)}
-            disabled={isUpdating}
-            className="border border-paper/20 px-3 py-1 font-body text-sm text-paper disabled:opacity-50"
-          >
+          <Button variant="secondary" size="sm" onClick={() => onAcknowledge(moment.id)} disabled={isUpdating}>
             Acknowledge
-          </button>
-          <button
-            onClick={() => onDismiss(moment.id)}
-            disabled={isUpdating}
-            className="border border-paper/10 px-3 py-1 font-body text-sm text-dim disabled:opacity-50"
-          >
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => onDismiss(moment.id)} disabled={isUpdating}>
             Dismiss
-          </button>
+          </Button>
           {(moment.rule_id === "R1" || moment.rule_id === "R6") && token && spender && (
             <RevokeButton
               momentId={moment.id}
@@ -98,6 +94,7 @@ export function MomentCard({
               token={token}
               spender={spender}
               chainId={chainId}
+              walletAddress={walletAddress}
               onRevoked={() => onRevoked(moment.id)}
             />
           )}
@@ -107,6 +104,6 @@ export function MomentCard({
           {STATUS_LABELS[moment.status] ?? moment.status}
         </p>
       )}
-    </div>
+    </Panel>
   );
 }

@@ -5,6 +5,7 @@ import { useAccount, useWaitForTransactionReceipt, useWriteContract } from "wagm
 import { erc20ApproveAbi, setApprovalForAllAbi } from "@/lib/horizon/abi";
 import type { RuleId } from "@/lib/oracle/types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/Button";
 
 export function RevokeButton({
   momentId,
@@ -12,6 +13,7 @@ export function RevokeButton({
   token,
   spender,
   chainId,
+  walletAddress,
   onRevoked,
 }: {
   momentId: string;
@@ -19,6 +21,7 @@ export function RevokeButton({
   token: string;
   spender: string;
   chainId: number;
+  walletAddress: string | null;
   onRevoked: () => void;
 }) {
   const { address: connectedAddress } = useAccount();
@@ -89,18 +92,27 @@ export function RevokeButton({
     }
   }
 
-  const walletMismatch = connectedAddress === undefined;
+  // Not just "is some wallet connected" — the connected wallet must be the
+  // exact one this Moment belongs to. Without this, switching MetaMask
+  // accounts while viewing another wallet's Moment would let you attempt a
+  // revoke transaction signed from the wrong address entirely.
+  const walletMismatch =
+    connectedAddress === undefined ||
+    (walletAddress !== null && connectedAddress.toLowerCase() !== walletAddress.toLowerCase());
   const busy = isSigning || (txHash && !isConfirmed) || verifying;
 
   return (
     <div className="flex flex-col gap-1">
-      <button
-        onClick={handleClick}
-        disabled={Boolean(busy) || walletMismatch}
-        className="bg-danger px-3 py-1 font-display text-sm text-paper disabled:opacity-50"
-      >
+      <Button variant="danger" size="sm" onClick={handleClick} disabled={Boolean(busy) || walletMismatch}>
         {isSigning ? "Confirm in wallet..." : txHash && !isConfirmed ? "Waiting for confirmation..." : verifying ? "Verifying..." : "Revoke approval"}
-      </button>
+      </Button>
+      {walletMismatch && !busy && (
+        <p className="font-body text-xs text-danger">
+          {connectedAddress === undefined
+            ? "Connect a wallet to revoke."
+            : "Connected wallet doesn't match this Moment's wallet — switch accounts to revoke."}
+        </p>
+      )}
       {error && <p className="font-body text-xs text-danger">{error}</p>}
     </div>
   );

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { isAddress } from "viem";
+import { Button } from "@/components/ui/Button";
+import { Panel } from "@/components/ui/Panel";
 
 type GuardVerdict = "safe" | "caution" | "danger";
 
@@ -60,8 +62,8 @@ export function Guard() {
   }
 
   return (
-    <div className="border border-brass/40 bg-ink-raised p-8">
-      <h2 className="font-display text-2xl text-paper">Guard</h2>
+    <Panel accent="brass" size="lg">
+      <h2 className="font-display text-3xl text-paper">Guard</h2>
       <p className="mt-2 font-body text-sm text-dim">
         Check a contract or spender address before you approve it. No wallet connection needed — this runs before
         you sign anything.
@@ -82,13 +84,9 @@ export function Guard() {
           <option value={143}>Monad</option>
           <option value={10143}>Monad Testnet</option>
         </select>
-        <button
-          type="submit"
-          disabled={loading || !address}
-          className="border border-brass px-4 py-2 font-display text-sm text-brass disabled:opacity-40"
-        >
+        <Button type="submit" disabled={loading || !address}>
           {loading ? "Checking…" : "Check"}
-        </button>
+        </Button>
       </form>
 
       {error && <p className="mt-4 font-body text-sm text-danger">{error}</p>}
@@ -124,6 +122,6 @@ export function Guard() {
           )}
         </div>
       )}
-    </div>
+    </Panel>
   );
 }

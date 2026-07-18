@@ -4,6 +4,7 @@ import { HeroPanel } from "@/components/HeroPanel";
 import { HowItWorks } from "@/components/HowItWorks";
 import { LogoMark } from "@/components/LogoMark";
 import { RulesShowcase } from "@/components/RulesShowcase";
+import { Button } from "@/components/ui/Button";
 
 // Static preview only — no wallet connection or auth on this page at all.
 // Opening the dashboard is a client-side view switch (see app/page.tsx),
@@ -26,12 +27,7 @@ export function Landing({ onOpenDashboard }: { onOpenDashboard: () => void }) {
                 Rules
               </a>
             </nav>
-            <button
-              onClick={onOpenDashboard}
-              className="border border-brass px-4 py-2 font-display text-sm text-brass hover:bg-brass hover:text-ink"
-            >
-              Dashboard
-            </button>
+            <Button onClick={onOpenDashboard}>Dashboard</Button>
           </div>
         </div>
       </header>
@@ -48,16 +44,14 @@ export function Landing({ onOpenDashboard }: { onOpenDashboard: () => void }) {
               <span className="italic text-brass">Meridian is that thought,</span> running before you sign.
             </h1>
             <p className="max-w-md font-body text-base leading-relaxed text-dim">
-              Meridian watches your registered wallet in real time and scores what it sees against six deterministic
-              rules — no LLM in the scoring path — so you have a real chance to act before a mistake settles.
+              Check a contract before you approve it — Guard runs before you sign, no wallet needed. Register a
+              wallet and Meridian keeps watching after that too: six deterministic rules, no LLM in the scoring path,
+              a real chance to act before a mistake settles.
             </p>
             <div className="flex flex-wrap items-center gap-6 pt-2">
-              <button
-                onClick={onOpenDashboard}
-                className="border border-brass px-5 py-2.5 font-display text-sm text-brass hover:bg-brass hover:text-ink"
-              >
+              <Button size="lg" onClick={onOpenDashboard}>
                 Get started
-              </button>
+              </Button>
               <a href="#how-it-works" className="font-technical text-xs text-dim underline underline-offset-4">
                 see how it works
               </a>
@@ -74,7 +68,7 @@ export function Landing({ onOpenDashboard }: { onOpenDashboard: () => void }) {
       <section id="how-it-works" className="border-y border-paper/10 bg-ink-raised">
         <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
           <p className="font-technical text-[11px] uppercase tracking-[0.2em] text-dim">How it works</p>
-          <h2 className="mt-2 font-display text-2xl text-paper">Watch, score, protect.</h2>
+          <h2 className="mt-2 font-display text-2xl text-paper">Check first. Watch always.</h2>
           <div className="mt-8 sm:mt-10">
             <HowItWorks />
           </div>
@@ -99,13 +93,10 @@ export function Landing({ onOpenDashboard }: { onOpenDashboard: () => void }) {
       <section className="border-t border-paper/10 bg-ink-raised">
         <div className="mx-auto flex max-w-5xl flex-col items-start gap-4 px-4 py-12 sm:px-6 sm:py-16">
           <p className="font-technical text-[11px] uppercase tracking-[0.2em] text-dim">Get started</p>
-          <h2 className="font-display text-2xl text-paper">Connect your wallet on the dashboard.</h2>
-          <button
-            onClick={onOpenDashboard}
-            className="border border-brass px-5 py-2.5 font-display text-sm text-brass hover:bg-brass hover:text-ink"
-          >
+          <h2 className="font-display text-2xl text-paper">Check an address, or connect your wallet.</h2>
+          <Button size="lg" onClick={onOpenDashboard}>
             Open dashboard
-          </button>
+          </Button>
         </div>
       </section>
 

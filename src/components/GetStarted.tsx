@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { BackLink } from "@/components/ui/BackLink";
+import { Panel } from "@/components/ui/Panel";
 import { WalletRegistrationForm } from "./WalletRegistrationForm";
 
 // Connecting a wallet and signing in happen once, from the ConnectButton in
@@ -14,8 +15,8 @@ export function GetStarted() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="border border-paper/10 bg-ink-raised p-8">
-        <h1 className="font-display text-2xl text-paper">Watch a wallet</h1>
+      <Panel size="lg">
+        <h1 className="font-display text-3xl text-paper">Watch a wallet</h1>
         <p className="mt-2 font-body text-sm text-dim">
           Meridian scores every transaction your registered wallet is about to make, in real time.
         </p>
@@ -32,20 +33,16 @@ export function GetStarted() {
             <WalletRegistrationForm onRegistered={() => setRegistered(true)} />
           )}
         </div>
-      </div>
+      </Panel>
 
       {registered && (
         <div className="flex flex-col items-center gap-3 text-center">
           <p className="font-body text-sm text-paper">
             Wallet registered. Horizon starts watching on the next sync window.
           </p>
-          <div className="flex gap-4">
-            <Link href="/timeline" className="font-technical text-xs text-brass underline underline-offset-4">
-              View Timeline
-            </Link>
-            <Link href="/guardrails" className="font-technical text-xs text-brass underline underline-offset-4">
-              Guardrails
-            </Link>
+          <div className="flex gap-3">
+            <BackLink href="/timeline" label="View Timeline" showArrow={false} />
+            <BackLink href="/guardrails" label="Guardrails" showArrow={false} />
           </div>
         </div>
       )}

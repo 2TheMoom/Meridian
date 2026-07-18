@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAccount } from "wagmi";
+import { Button } from "@/components/ui/Button";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 export function WalletRegistrationForm({ onRegistered }: { onRegistered: () => void }) {
@@ -59,13 +60,9 @@ export function WalletRegistrationForm({ onRegistered }: { onRegistered: () => v
         />
       </label>
       {error && <p className="font-body text-sm text-danger">{error}</p>}
-      <button
-        type="submit"
-        disabled={!address || submitting}
-        className="border border-brass px-4 py-2 font-display text-sm text-brass disabled:opacity-40"
-      >
+      <Button type="submit" disabled={!address || submitting} className="w-fit">
         {submitting ? "Registering..." : "Register this wallet"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -1,12 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { formatEther, parseEther } from "viem";
+import { AppHeader } from "@/components/AppHeader";
+import { AuthGate } from "@/components/AuthGate";
+import { BackLink } from "@/components/ui/BackLink";
+import { Button } from "@/components/ui/Button";
+import { Panel } from "@/components/ui/Panel";
+import { WalletSelect } from "@/components/WalletSelect";
+import { useAuthedFetch } from "@/hooks/useAuthedFetch";
 import { RULE_LABELS } from "@/lib/oracle/labels";
 import type { RuleId } from "@/lib/oracle/types";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
 type Wallet = { id: string; address: string; label: string | null; notification_email: string | null };
 type Tier = "off" | "notify" | "confirm";
@@ -15,8 +19,7 @@ type PolicyRow = { rule_id: RuleId; tier: Tier; threshold: Record<string, unknow
 const RULE_ORDER: RuleId[] = ["R1", "R2", "R3", "R4", "R5", "R6"];
 const TIERS: Tier[] = ["off", "notify", "confirm"];
 
-export default function GuardrailsPage() {
-  const { session, loading: authLoading } = useSupabaseAuth();
+function GuardrailsContent() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [selectedWalletId, setSelectedWalletId] = useState<string | null>(null);
   const [policies, setPolicies] = useState<PolicyRow[] | null>(null);
@@ -25,23 +28,9 @@ export default function GuardrailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
 
-  const supabase = createBrowserSupabaseClient();
-
-  const authedFetch = useCallback(
-    async (path: string, init?: RequestInit) => {
-      const { data } = await supabase.auth.getSession();
-      const accessToken = data.session?.access_token;
-      if (!accessToken) throw new Error("Not signed in");
-      return fetch(path, {
-        ...init,
-        headers: { ...init?.headers, Authorization: `Bearer ${accessToken}` },
-      });
-    },
-    [supabase],
-  );
+  const authedFetch = useAuthedFetch();
 
   useEffect(() => {
-    if (!session) return;
     authedFetch("/api/wallets")
       .then((res) => res.json())
       .then((body: { wallets?: Wallet[] }) => {
@@ -50,7 +39,7 @@ export default function GuardrailsPage() {
         setSelectedWalletId((current) => current ?? list[0]?.id ?? null);
       })
       .catch(() => setError("Failed to load wallets."));
-  }, [session, authedFetch]);
+  }, [authedFetch]);
 
   useEffect(() => {
     const wallet = wallets.find((w) => w.id === selectedWalletId);
@@ -76,7 +65,7 @@ export default function GuardrailsPage() {
     setPolicies((prev) => prev?.map((p) => (p.rule_id === ruleId ? { ...p, tier } : p)) ?? null);
   }
 
-  async function save() {
+  const save = useCallback(async () => {
     if (!policies || !selectedWalletId) return;
     setStatus("saving");
     setError(null);
@@ -128,54 +117,11 @@ export default function GuardrailsPage() {
       setError("Couldn't save guardrails. Try again.");
       setStatus("idle");
     }
-  }
-
-  if (authLoading) {
-    return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-4 py-16 sm:px-6">
-        <h1 className="font-display text-3xl text-paper">Guardrails</h1>
-        <p className="font-body text-dim">Loading...</p>
-      </main>
-    );
-  }
-
-  if (!session) {
-    return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-4 py-16 sm:px-6">
-        <h1 className="font-display text-3xl text-paper">Guardrails</h1>
-        <p className="font-body text-dim">
-          Sign in and register a wallet first.{" "}
-          <Link href="/dashboard" className="text-brass underline underline-offset-4">
-            Go to dashboard
-          </Link>
-          .
-        </p>
-      </main>
-    );
-  }
+  }, [policies, selectedWalletId, floorMon, notificationEmail, authedFetch]);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-4 py-16 sm:px-6">
-      <header className="flex items-center justify-between">
-        <h1 className="font-display text-3xl text-paper">Guardrails</h1>
-        <Link href="/timeline" className="font-technical text-xs uppercase tracking-widest text-dim underline underline-offset-4 hover:text-paper">
-          Timeline
-        </Link>
-      </header>
-
-      {wallets.length > 1 && (
-        <select
-          value={selectedWalletId ?? ""}
-          onChange={(e) => setSelectedWalletId(e.target.value)}
-          className="w-fit border border-paper/15 bg-ink-raised px-3 py-2 font-technical text-sm text-paper"
-        >
-          {wallets.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.label ?? w.address}
-            </option>
-          ))}
-        </select>
-      )}
+    <div className="flex flex-col gap-6">
+      <WalletSelect wallets={wallets} selectedWalletId={selectedWalletId} onChange={setSelectedWalletId} />
 
       {error && <p className="font-body text-sm text-danger">{error}</p>}
 
@@ -183,7 +129,7 @@ export default function GuardrailsPage() {
         <p className="font-body text-dim">Loading...</p>
       ) : (
         <div className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1 border border-paper/10 bg-ink-raised p-4 font-body text-sm text-dim">
+          <Panel as="label" className="flex flex-col gap-1 font-body text-sm text-dim">
             Notification email — Notify/Confirm-tier Moments email here. Leave blank to get in-app only.
             <input
               type="email"
@@ -192,13 +138,13 @@ export default function GuardrailsPage() {
               placeholder="you@example.com"
               className="mt-1 w-full max-w-sm border border-paper/15 bg-ink px-2 py-1 font-technical text-sm text-paper"
             />
-          </label>
+          </Panel>
 
           {RULE_ORDER.map((ruleId) => {
             const policy = policies.find((p) => p.rule_id === ruleId);
             if (!policy) return null;
             return (
-              <div key={ruleId} className="flex flex-col gap-2 border border-paper/10 bg-ink-raised p-4">
+              <Panel key={ruleId} className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <span className="font-display text-lg text-paper">{RULE_LABELS[ruleId]}</span>
                   <div className="flex gap-1">
@@ -227,7 +173,7 @@ export default function GuardrailsPage() {
                     />
                   </label>
                 )}
-              </div>
+              </Panel>
             );
           })}
 
@@ -237,15 +183,28 @@ export default function GuardrailsPage() {
             recurring. Per-rule tier and the R5 floor above are live.
           </p>
 
-          <button
-            onClick={save}
-            disabled={status === "saving"}
-            className="w-fit border border-brass px-4 py-2 font-display text-sm text-brass hover:bg-brass hover:text-ink disabled:opacity-50"
-          >
+          <Button onClick={save} disabled={status === "saving"} className="w-fit">
             {status === "saving" ? "Saving..." : status === "saved" ? "Saved" : "Save guardrails"}
-          </button>
+          </Button>
         </div>
       )}
-    </main>
+    </div>
+  );
+}
+
+export default function GuardrailsPage() {
+  return (
+    <div className="min-h-screen bg-ink">
+      <AppHeader />
+      <main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-16 sm:px-6">
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="font-display text-3xl text-paper">Guardrails</h1>
+          <BackLink href="/dashboard" label="Dashboard" />
+        </div>
+        <AuthGate>
+          <GuardrailsContent />
+        </AuthGate>
+      </main>
+    </div>
   );
 }
