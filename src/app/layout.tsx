@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, IBM_Plex_Mono, Inter } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
@@ -24,10 +24,30 @@ const plexMono = IBM_Plex_Mono({
   variable: "--font-plex-mono",
 });
 
+const TAGLINE = "The chain is too fast for a second thought. Meridian is that thought, running before you sign.";
+
 export const metadata: Metadata = {
+  // Falls back to localhost so opengraph-image/other absolute-URL metadata
+  // still resolve correctly in dev — set MERIDIAN_APP_URL once there's a
+  // real deployed domain and this picks it up automatically.
+  metadataBase: new URL(process.env.MERIDIAN_APP_URL ?? "http://localhost:3000"),
   title: "Meridian",
-  description:
-    "The chain is too fast for second thoughts. Meridian is your second thought, running before you sign.",
+  description: TAGLINE,
+  openGraph: {
+    title: "Meridian",
+    description: TAGLINE,
+    type: "website",
+    siteName: "Meridian",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Meridian",
+    description: TAGLINE,
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0C0F14",
 };
 
 export default function RootLayout({
