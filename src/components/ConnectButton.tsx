@@ -107,8 +107,8 @@ export function ConnectButton() {
   if (!disconnecting && isConnected && address && (!session || addressMismatch)) {
     if (error) {
       return (
-        <div className="flex flex-col items-start gap-2">
-          <p className="font-body text-xs text-danger">{error}</p>
+        <div className="flex flex-col items-end gap-2">
+          <p className="max-w-[220px] text-right font-body text-xs text-danger">{error}</p>
           <div className="flex items-center gap-3">
             <button
               onClick={() => void handleSignIn()}
@@ -209,7 +209,7 @@ export function ConnectButton() {
       >
         {connecting ? "Connecting…" : "Connect Wallet"}
       </button>
-      {connectError && <p className="font-body text-xs text-danger">{connectError}</p>}
+      {connectError && <p className="max-w-[220px] text-right font-body text-xs text-danger">{connectError}</p>}
     </div>
   );
 }

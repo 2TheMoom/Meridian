@@ -96,7 +96,7 @@ A daily per-wallet Moment cap (default 10, across all rules combined) exists spe
 
 | Network | Address |
 |---|---|
-| Monad testnet (chain 10143) | [`0xA72664323B63E837048120C9F9b801bDBCf5176a`](https://testnet.monadexplorer.com/address/0xA72664323B63E837048120C9F9b801bDBCf5176a) |
+| Monad testnet (chain 10143) | [`0xA72664323B63E837048120C9F9b801bDBCf5176a`](https://testnet.monadscan.com/address/0xA72664323B63E837048120C9F9b801bDBCf5176a) |
 | Monad mainnet (chain 143) | Not yet — on the Roadmap, gated on the self-audit actually happening, not on a deadline |
 
 Deploy flow is keystore-based, never a plaintext key — see [`contracts/README.md`](./contracts/README.md).

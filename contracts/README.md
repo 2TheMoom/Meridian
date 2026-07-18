@@ -49,7 +49,9 @@ forge script script/DeployMeridianKeel.s.sol \
 
 `--account` prompts for the keystore password at broadcast time (or set `ETH_PASSWORD`/`--password-file` for non-interactive runs). The broadcasting key becomes the contract's `owner` — see `DeployMeridianKeel.s.sol` for why that's a low-stakes role (no fund custody) and how to hand it off with `cast send <address> "transferOwnership(address)" <newOwner> --rpc-url monad_testnet --account meridian-deployer` afterward if needed.
 
-`--verify` submits source to Etherscan's V2 multichain API (serves testnet.monadexplorer.com) using the `monad_testnet` entry in `foundry.toml`'s `[etherscan]` block; omit it and run `forge verify-contract <address> src/MeridianKeel.sol:MeridianKeel --chain monad_testnet` separately if you'd rather verify after confirming the deployment looks right on-chain first.
+`--verify` submits source to Etherscan's V2 multichain API (serves testnet.monadscan.com) using the `monad_testnet` entry in `foundry.toml`'s `[etherscan]` block; omit it and run `forge verify-contract <address> src/MeridianKeel.sol:MeridianKeel --chain monad-testnet` separately if you'd rather verify after confirming the deployment looks right on-chain first.
+
+> **Note from the actual deploy:** in practice, `forge verify-contract` on this Foundry build (1.7.1) forces Etherscan mode whenever `ETHERSCAN_API_KEY` is set in `.env` — even with `--verifier sourcify` passed explicitly — and Etherscan verification for Monad testnet failed on a "missing chainid" error regardless of `--chain`/`--verifier-url` overrides. What actually worked: `env -u ETHERSCAN_API_KEY forge verify-contract <address> src/MeridianKeel.sol:MeridianKeel --chain 10143 --verifier sourcify`, which submits to Sourcify (no API key needed) and Sourcify itself propagates the result to Etherscan/MonadScan.
 
 Broadcast receipts under `broadcast/*/10143/` are committed as a deployment record; local anvil dry runs (`broadcast/*/31337/`) are gitignored.
 

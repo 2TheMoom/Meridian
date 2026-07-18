@@ -36,7 +36,7 @@ export const monadTestnet = defineChain({
       name: "Monad Testnet Explorer",
       url:
         process.env.NEXT_PUBLIC_MONAD_TESTNET_EXPLORER_URL ??
-        "https://testnet.monadexplorer.com",
+        "https://testnet.monadscan.com",
     },
   },
   testnet: true,
